@@ -94,13 +94,13 @@ def generate(system_prompt:str, model_type:str):
                 modified += "\n" + line
         if not os.path.exists(f'./problems/{element}/{model_dir}'):
             os.mkdir(f'./problems/{element}/{model_dir}')
-        if not os.path.exists(f'./problems/{element}/{model_dir}/api_original.mzn'):
+        if not os.path.exists(f'./problems/{element}/{model_dir}/api_original.desc'):
             original_model = model_func(original, system_prompt)
-            with open(f'./problems/{element}/{model_dir}/api_original.mzn', 'w') as f:
+            with open(f'./problems/{element}/{model_dir}/api_original.desc', 'w') as f:
                 f.write(original_model)
-        if not os.path.exists(f'./problems/{element}/{model_dir}/api_modified.mzn'):
+        if not os.path.exists(f'./problems/{element}/{model_dir}/api_modified.desc'):
             modified_model = model_func(modified, system_prompt)
-            with open(f'./problems/{element}/{model_dir}/api_modified.mzn', 'w') as f:
+            with open(f'./problems/{element}/{model_dir}/api_modified.desc', 'w') as f:
                 f.write(modified_model)
 
 def main():
