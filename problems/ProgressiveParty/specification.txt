@@ -1,0 +1,93 @@
+original:
+
+boat number 	capacity 	crew size
+1 	6 	2
+2 	8 	2
+3 	12 	2
+4 	12 	2
+5 	12 	4
+6 	12 	4
+7 	12 	4
+8 	10 	1
+9 	10 	2
+10 	10 	2
+11 	10 	2
+12 	10 	3
+13 	8 	4
+14 	8 	2
+15 	8 	3
+16 	12 	6
+17 	8 	2
+18 	8 	2
+19 	8 	4
+20 	8 	2
+21 	8 	4
+22 	8 	5
+23 	7 	4
+24 	7 	4
+25 	7 	2
+26 	7 	2
+27 	7 	4
+28 	7 	5
+29 	6 	2
+30 	6 	4
+31 	6 	2
+32 	6 	2
+33 	6 	2
+34 	6 	2
+35 	6 	2
+36 	6 	2
+37 	6 	4
+38 	6 	5
+39 	9 	7
+40 	0 	2
+41 	0 	3
+42 	0 	4
+modified:
+A university is organizing an academic networking fair. Certain classrooms are designated as hosts, where sessions are held, while the remaining groups of participants rotate as visitors between host rooms over several successive half-hour slots.
+The facilitators assigned to host rooms remain fixed, while visitor groups move from one host room to another across the schedule. Each room has a maximum seating capacity, and the people in a session cannot exceed that room’s capacity. Group sizes differ, and each group must experience a diverse set of sessions.
+Furthermore, a visitor group cannot attend the same host room twice and two visitor groups should not meet more than once across the fair.
+The organizer’s challenge is to design a feasible schedule that respects room capacities, group sizes, and session rules, while maximising the number of free rooms remained (we assume to have all necessary rooms but we want to leave as many free room as possible).
+room number 	capacity 	hosts
+1 	6 	2
+2 	8 	2
+3 	12 	2
+4 	12 	2
+5 	12 	4
+6 	12 	4
+7 	12 	4
+8 	10 	1
+9 	10 	2
+10 	10 	2
+11 	10 	2
+12 	10 	3
+13 	8 	4
+14 	8 	2
+15 	8 	3
+16 	12 	6
+17 	8 	2
+18 	8 	2
+19 	8 	4
+20 	8 	2
+21 	8 	4
+22 	8 	5
+23 	7 	4
+24 	7 	4
+25 	7 	2
+26 	7 	2
+27 	7 	4
+28 	7 	5
+29 	6 	2
+30 	6 	4
+31 	6 	2
+32 	6 	2
+33 	6 	2
+34 	6 	2
+35 	6 	2
+36 	6 	2
+37 	6 	4
+38 	6 	5
+39 	9 	7
+40 	0 	2
+41 	0 	3
+42 	0 	4

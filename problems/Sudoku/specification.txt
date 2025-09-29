@@ -1,0 +1,20 @@
+original:
+Sudoku is a logic-based number placement puzzle. The standard game is played on a 9×9 grid, subdivided into nine 3×3 subgrids ("boxes"). The goal is to fill each cell with a digit from 1 to 9 so that:
+Each row contains all digits 1–9 exactly once.
+Each column contains all digits 1–9 exactly once.
+Each 3×3 box contains all digits 1–9 exactly once.
+modified:
+My game is inspired by chess with similar pieces but it has different rules. It involves positioning n queens with different garments on a n by n chess board where n = 9. The queens can only attack queens with the same garment (eg. a queen with a white hat can only attach another white hat queen but not a green hat queen). Each queen can attack other queens only in its attacking clique. There are 3 types of attacking cliques: 
+- Row: a queen can attack another queen on the same row
+- Column: a queen can attack another queen on the same column 
+- Block: a queen can attack another queen on the same block. A block is a 3 by 3 square and there are 9 blocks in total: 
+	- Top left: from 0,0 to 2,2
+	- Top center: from 0,3 to 2,5
+	- Top right: from 0,6 to 2,8
+	- Center left: from 3,0 to 5,2
+	- Center center: from 3,3 to 5,5
+	- Center right: from 3,6 to 5,8
+	- Bottom left: from 6,0 to 8,2
+	- Bottom center: from 6,3 to 8,5
+	- Bottom right: from 6,6 to 8,8
+I would like to place queens such to maximise the number of queens garments on the board while, at the same time, avoid attacks between queens. I already have some pre-filled spots I need the model to take into account (for example: cell[3,6] = blue_queen)

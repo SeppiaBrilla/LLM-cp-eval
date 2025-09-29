@@ -1,0 +1,5 @@
+original:
+Nonograms are a popular puzzle, which goes by different names in different countries. Solvers have to shade in squares in a grid so that blocks of consecutive shaded squares satisfy constraints given for each row and column. Constraints typically indicate the sequence of shaded blocks (e.g. 3,1,2 means that there is a block of 3, then a gap of unspecified size, a block of length 1, another gap, and then a block of length 2).
+modified:
+An architect is designing a facade composed of square tiles arranged in a grid. Some tiles must be left blank, while others are to be filled with decorative stone panels.
+To achieve the desired aesthetic, each row and column of the facade must follow a precise pattern of consecutive stone blocks. For example, a requirement of (3, 1, 2) means that the row must contain a block of 3 consecutive filled tiles, followed—after at least one blank tile—by a block of 1, and later another block of 2. The exact spacing between blocks is flexible, but the order and lengths are fixed.
