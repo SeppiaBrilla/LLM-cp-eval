@@ -66,7 +66,7 @@ def ask_claude(prompt: str, system_prompt: str = "You are a helpful assistant.")
 
 def generate(system_prompt:str, model_type:str):
     if model_type == 'gpt4':
-        model_dir = 'chatGPT'
+        model_dir = 'GPT4'
         model_func = ask_gpt
     elif model_type == 'r1':
         model_dir = 'R1'
