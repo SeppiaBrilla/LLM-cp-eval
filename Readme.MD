@@ -39,6 +39,10 @@ Each problem in the `problems/` directory has its own subdirectory, structured a
 
   * **`api_original.desc`** – LLM’s response to the original problem description (including model and reasoning steps).
   * **`api_modified.desc`** – LLM’s response to the rephrased problem description (including model and reasoning steps).
+  * **`summary.json`** – Summary of results of the two models under the **`original`** and **`modified`** keys. Each having 3 boolean sub-keys: 
+    * **`runs`**: if the models runs and it solves the problem correctly, e.g. the constraints actually do what they are supposed to do.
+    * **`globals`**: if the model contains global constraints.
+    * **`correctProblem`**: if the proposed model solves the correct problem.
 
 ---
 
