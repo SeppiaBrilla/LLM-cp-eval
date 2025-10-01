@@ -6,7 +6,7 @@
     },
     "modified": {
         "runs": false,
-        "golbals": false,
+        "globals": false,
         "correctProblem": true
     }
 }
