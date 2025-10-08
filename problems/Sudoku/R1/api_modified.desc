@@ -1,106 +1,80 @@
 **Reasoning:**
 
-1. **Problem Overview**: We need to place exactly 9 queens on a 9x9 board, each with a garment (represented by an integer from 1 to 9). The goal is to maximize the number of distinct garments used, while ensuring that no two queens with the same garment attack each other. Attacks occur only if queens share the same garment and are in the same "attacking clique" (row, column, or 3x3 block).
+1. **Problem Analysis**: The problem involves placing queens on a 9x9 board where each queen has a "garment" (like a color or type). Queens can only attack others with the same garment, and attacks are limited to three cliques: same row, same column, or same 3x3 block. The goal is to maximize the total number of queens placed while ensuring that for each garment, no two queens with that garment attack each other (i.e., no two share a row, column, or block). There are pre-filled spots with fixed garment assignments.
 
-2. **Decision Variables**: 
-   - A 9x9 grid where each cell can hold a value from 0 to 9. Value 0 indicates no queen, and values 1-9 represent the garment type.
-   - Additional variables to track which garment values are used, for the objective.
+2. **Key Elements**:
+   - Board size: 9x9 (indices 0 to 8 for rows and columns).
+   - Attacking cliques: rows, columns, and 3x3 blocks (9 blocks in total, defined regularly).
+   - Garments: Each queen has a garment, and attacks only occur between queens with the same garment. The number of possible garments is not specified, but since each garment can have at most 9 queens (due to row, column, and block constraints), and the board has 81 cells, we need enough garments to potentially place up to 81 queens. Setting the number of garments (g) to 20 ensures flexibility, as 20 > 9 and 20*9=180 > 81.
 
-3. **Domains**:
-   - Grid cells: integers from 0 to 9.
-   - Garment usage: Boolean for each garment value 1..9.
+3. **Decision Variables**:
+   - For each cell (i,j), define a variable `garment[i,j]` with domain 0..g, where 0 means no queen, and 1..g means a queen with that garment ID.
 
 4. **Constraints**:
-   - **Exactly 9 queens**: The sum of non-zero values in the grid must be 9.
-   - **Row attacks avoided**: In each row, all non-zero garment values must be distinct.
-   - **Column attacks avoided**: In each column, all non-zero garment values must be distinct.
-   - **Block attacks avoided**: In each 3x3 block, all non-zero garment values must be distinct.
-   - **Pre-filled spots**: Some cells may have fixed garment values (e.g., cell (3,6) fixed to a specific garment).
+   - **Row constraints**: For each garment k (1..g) and each row i, at most one cell in that row has garment k.
+   - **Column constraints**: For each garment k and each column j, at most one cell in that column has garment k.
+   - **Block constraints**: For each garment k and each block b (0..8), at most one cell in that block has garment k. Blocks are defined based on row and column divisions (e.g., block ID = (i div 3) * 3 + (j div 3)).
+   - **Pre-filled spots**: Certain cells have fixed garment assignments, which must be enforced.
 
-5. **Objective Function**: Maximize the number of distinct garment values used (i.e., the count of garment values from 1 to 9 that appear in the grid).
+5. **Objective Function**: Maximize the total number of queens, which is the count of cells where `garment[i,j] != 0`.
 
 6. **Modeling Choices**:
-   - Garments are represented as integers 1..9 for simplicity, but could be mapped to symbolic names (e.g., 1 for "blue").
-   - Attack constraints are implemented by ensuring alldifferent conditions on non-zero values in each clique, using pairwise comparisons.
-   - Blocks are defined as 3x3 regions with indices 1..9 for rows and columns.
-
-7. **Simplifications**:
-   - Since only 9 queens are placed, the maximum distinct garments is 9, but pre-filled spots or placement constraints may reduce this.
-   - The model uses a grid-based approach for clarity, with constraints expressed over all pairs in each clique.
+   - Use 0-based indexing for rows and columns to match the problem description.
+   - Define blocks using integer division for clarity and efficiency.
+   - Parameterize the number of garments (g) and pre-filled spots for flexibility. In the code, g is set to 20, but it can be adjusted if needed.
+   - Pre-filled spots are handled via a parameter array specifying (row, column, garment_id) for each fixed assignment.
 
 **MiniZinc Model:**
-
 ```minizinc
-% Queens with Garments Problem
-% Place 9 queens on a 9x9 board with garments 1..9, avoiding attacks in rows, columns, and blocks.
-% Maximize the number of distinct garments used.
+% Model for placing queens with garments on a 9x9 board
+% Maximize the number of queens while avoiding attacks between same-garment queens in rows, columns, and blocks.
 
-% Sets for rows and columns
-set of int: ROWS = 1..9;
-set of int: COLS = 1..9;
-% Garments are represented as integers 1..9
-set of int: GARMENTS = 1..9;
+% Parameters
+int: n = 9; % board size
+int: g = 20; % number of possible garments (1..g); set to 20 for flexibility
+set of int: ROW = 0..n-1;
+set of int: COL = 0..n-1;
+set of int: GARMENT = 1..g;
+set of int: BLOCK = 0..8; % 9 blocks
 
-% Decision variable: grid[i,j] = 0 if no queen, or garment value 1..9 if queen
-array[ROWS, COLS] of var 0..9: grid;
+% Pre-filled spots: array of (row, column, garment_id)
+% Example: fixed = [|3,6,1|] for cell[3,6] with garment_id 1 (e.g., blue_queen)
+array[1..num_fixed, 1..3] of int: fixed; % to be defined in data section
+int: num_fixed; % number of fixed assignments
 
-% Constraint: Exactly 9 queens are placed
-constraint sum([grid[i,j] != 0 | i in ROWS, j in COLS]) = 9;
+% Decision variable: garment for each cell, 0 means no queen
+array[ROW, COL] of var 0..g: garment;
 
-% Constraint: In each row, all non-zero garment values are distinct
-constraint forall(i in ROWS) (
-    forall(j, k in COLS where j < k) (
-        if grid[i,j] != 0 /\ grid[i,k] != 0 then grid[i,j] != grid[i,k] else true endif
-    )
+% Constraints
+
+% For each garment, at most one per row
+constraint forall(k in GARMENT, i in ROW) (
+    sum(j in COL)(garment[i,j] == k) <= 1
 );
 
-% Constraint: In each column, all non-zero garment values are distinct
-constraint forall(j in COLS) (
-    forall(i, k in ROWS where i < k) (
-        if grid[i,j] != 0 /\ grid[k,j] != 0 then grid[i,j] != grid[k,j] else true endif
-    )
+% For each garment, at most one per column
+constraint forall(k in GARMENT, j in COL) (
+    sum(i in ROW)(garment[i,j] == k) <= 1
 );
 
-% Define blocks: 3x3 regions
-% Block indices: 1..9, where block b corresponds to:
-%   rows: 3*((b-1) div 3) + 1 .. 3*((b-1) div 3) + 3
-%   cols: 3*((b-1) mod 3) + 1 .. 3*((b-1) mod 3) + 3
-constraint forall(b in 1..9) (
-    let {
-        int: start_row = 3 * ((b-1) div 3) + 1,
-        int: end_row = start_row + 2,
-        int: start_col = 3 * ((b-1) mod 3) + 1,
-        int: end_col = start_col + 2
-    } in
-    forall(i1, j1, i2, j2 in start_row..end_row, start_col..end_col where (i1, j1) != (i2, j2)) (
-        if grid[i1,j1] != 0 /\ grid[i2,j2] != 0 then grid[i1,j1] != grid[i2,j2] else true endif
-    )
+% For each garment, at most one per block
+% Block ID for cell (i,j) is (i div 3) * 3 + (j div 3)
+constraint forall(k in GARMENT, b in BLOCK) (
+    sum(i in ROW, j in COL where (i div 3) * 3 + (j div 3) == b)(garment[i,j] == k) <= 1
 );
 
-% Pre-filled spots: Example: cell (3,6) is fixed to garment 1 (e.g., blue_queen)
-% Uncomment and modify as needed for specific pre-filled assignments
-% constraint grid[3,6] = 1; % blue_queen represented as 1
-
-% Variables to track which garments are used
-array[GARMENTS] of var bool: used_garment;
-
-% Constraint: used_garment[g] is true if garment g appears in the grid
-constraint forall(g in GARMENTS) (
-    used_garment[g] <-> exists(i in ROWS, j in COLS) (grid[i,j] == g)
+% Pre-filled spots constraints
+constraint forall(f in 1..num_fixed) (
+    garment[fixed[f,1], fixed[f,2]] == fixed[f,3]
 );
 
-% Objective: Maximize the number of distinct garments used
-solve maximize sum(used_garment);
+% Objective: maximize the number of queens (cells with garment != 0)
+solve maximize sum(i in ROW, j in COL)(garment[i,j] != 0);
 
-% Output: Display the grid and distinct garment count
-output [
-    "Grid:\n" ++ 
-    show2d(grid) ++ 
-    "\nNumber of distinct garments: " ++ show(sum(used_garment))
-];
+% Output: show the board with garment IDs (0 for empty)
+output [ if j == 0 then "\n" else "" endif ++ 
+         if garment[i,j] == 0 then "." else show(garment[i,j]) endif ++ " " 
+         | i in ROW, j in COL ];
 ```
 
-**Notes:**
-- The model uses integers 1-9 for garments; map these to symbolic names (e.g., 1 for "blue") as needed.
-- Pre-filled spots can be added as constraints on specific grid cells (e.g., `constraint grid[3,6] = 1;` for a blue queen at (3,6)).
-- The output shows the grid and the count of distinct garments.
+**Note:** This model assumes that the pre-filled spots are provided in the data section with `num_fixed` and the `fixed` array. For example, if `cell[3,6]` has `blue_queen` with garment ID 1, include `fixed = [|3,6,1|];` in the data. The number of garments `g` is set to 20 but can be reduced if needed, though 20 is safe for maximizing up to 81 queens.

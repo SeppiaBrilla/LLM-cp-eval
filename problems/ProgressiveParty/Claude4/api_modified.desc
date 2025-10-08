@@ -1,29 +1,36 @@
 **Reasoning:**
 
 1. **Decision Variables:**
-   - `room_used[r]`: Boolean indicating if room r is used as a host room
-   - `group_in_room[g, r, t]`: Boolean indicating if visitor group g is in host room r at time slot t
-   - `num_groups`: Integer representing the total number of visitor groups (to be determined)
+   - `used[r]`: Boolean variable indicating whether room `r` is used as a host room
+   - `schedule[g, t, r]`: Boolean variable indicating whether visitor group `g` is in room `r` at time slot `t`
+   - `host_assignment[r, h]`: Boolean variable indicating whether host `h` is assigned to room `r`
 
-2. **Parameters:**
-   - Rooms 1-42 with given capacities and host counts
-   - Time slots (need to determine appropriate number)
-   - Group sizes (need to be defined or made variable)
+2. **Domains:**
+   - Rooms: 1 to 42 (though rooms 40-42 have capacity 0, so effectively unusable)
+   - Time slots: We need to determine this based on the problem structure
+   - Visitor groups: We need to infer this from the host counts and problem constraints
+   - Hosts: We can count unique hosts from the data (1 to 7)
 
 3. **Key Constraints:**
-   - **Room capacity**: Total people in a room (hosts + visitors) ≤ room capacity
-   - **Group assignment**: Each visitor group must be in exactly one room per time slot
-   - **No repeat visits**: Each visitor group visits each host room at most once
-   - **Limited group meetings**: Any two visitor groups meet in the same room at most once
-   - **Room usage consistency**: If a room is used, it must have consistent host assignment
+   - Room capacity: Total people in a room (hosts + visitors) ≤ room capacity
+   - Each visitor group attends exactly one room per time slot
+   - No visitor group visits the same host room twice
+   - No two visitor groups meet more than once across all sessions
+   - Each used room must have its designated number of hosts assigned
+   - Host assignment consistency: if a room is used, it must have the correct number of hosts
 
 4. **Objective:**
-   - Maximize the number of unused rooms (minimize `sum(room_used)`)
+   - Maximize the number of unused rooms (minimize the number of used rooms)
 
-5. **Modeling Choices:**
-   - Assume uniform group sizes for simplicity (can be made variable)
-   - Use a reasonable number of time slots (e.g., 6-8 slots)
-   - Only rooms with capacity > 0 can be host rooms
+5. **Problem Analysis:**
+   - We have 7 different hosts and varying host requirements per room
+   - We need to determine appropriate number of time slots and visitor groups
+   - The constraint that "two visitor groups should not meet more than once" is complex and requires careful modeling
+   - We need to assume reasonable values for number of visitor groups and time slots
+
+6. **Modeling Choices:**
+   - Assume 6 time slots and 8 visitor groups of size 3 each (these can be adjusted)
+   - Model the "meeting constraint" by tracking which pairs of groups are in the same room
 
 **MiniZinc model:**
 
@@ -32,77 +39,80 @@
 
 % Parameters
 int: num_rooms = 42;
-int: num_time_slots = 6;  % Adjustable based on requirements
-int: group_size = 4;      % Uniform group size assumption
+int: num_time_slots = 6;
+int: num_visitor_groups = 8;
+int: visitor_group_size = 3;
+int: num_hosts = 7;
 
 % Room data
 array[1..num_rooms] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0];
-array[1..num_rooms] of int: hosts = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
-
-% Valid rooms (capacity > 0)
-set of int: valid_rooms = {r | r in 1..num_rooms where capacity[r] > 0};
-int: num_valid_rooms = card(valid_rooms);
+array[1..num_rooms] of int: required_hosts = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
 
 % Decision variables
-array[valid_rooms] of var bool: room_used;
-var 1..20: num_groups;  % Maximum reasonable number of groups
-array[1..20, valid_rooms, 1..num_time_slots] of var bool: group_in_room;
+array[1..num_rooms] of var bool: used;  % whether room r is used
+array[1..num_visitor_groups, 1..num_time_slots, 1..num_rooms] of var bool: schedule;  % group g in room r at time t
+array[1..num_visitor_groups, 1..num_visitor_groups, 1..num_time_slots, 1..num_rooms] of var bool: groups_meet;  % groups g1 and g2 meet in room r at time t
 
-% Constraint: Each group is in exactly one room per time slot
-constraint forall(g in 1..num_groups, t in 1..num_time_slots) (
-    sum(r in valid_rooms)(group_in_room[g, r, t]) = 1
+% Objective: maximize free rooms (minimize used rooms)
+var int: objective = sum(r in 1..num_rooms)(used[r]);
+solve minimize objective;
+
+% Constraints
+
+% 1. Room capacity constraint
+constraint forall(r in 1..num_rooms, t in 1..num_time_slots)(
+    if used[r] then
+        required_hosts[r] + visitor_group_size * sum(g in 1..num_visitor_groups)(schedule[g,t,r]) <= capacity[r]
+    else
+        sum(g in 1..num_visitor_groups)(schedule[g,t,r]) = 0
+    endif
 );
 
-% Constraint: Room capacity not exceeded
-constraint forall(r in valid_rooms, t in 1..num_time_slots) (
-    hosts[r] + group_size * sum(g in 1..num_groups)(group_in_room[g, r, t]) <= capacity[r]
+% 2. Each visitor group attends exactly one room per time slot
+constraint forall(g in 1..num_visitor_groups, t in 1..num_time_slots)(
+    sum(r in 1..num_rooms)(schedule[g,t,r]) = 1
 );
 
-% Constraint: Each group visits each room at most once
-constraint forall(g in 1..num_groups, r in valid_rooms) (
-    sum(t in 1..num_time_slots)(group_in_room[g, r, t]) <= 1
+% 3. No visitor group visits the same room twice
+constraint forall(g in 1..num_visitor_groups, r in 1..num_rooms)(
+    sum(t in 1..num_time_slots)(schedule[g,t,r]) <= 1
 );
 
-% Constraint: Two groups meet at most once
-constraint forall(g1, g2 in 1..num_groups where g1 < g2) (
-    sum(r in valid_rooms, t in 1..num_time_slots)(
-        group_in_room[g1, r, t] * group_in_room[g2, r, t]
-    ) <= 1
+% 4. Define when groups meet
+constraint forall(g1, g2 in 1..num_visitor_groups, t in 1..num_time_slots, r in 1..num_rooms where g1 < g2)(
+    groups_meet[g1,g2,t,r] <-> (schedule[g1,t,r] /\ schedule[g2,t,r])
 );
 
-% Constraint: Room usage consistency
-constraint forall(r in valid_rooms) (
-    room_used[r] = (sum(g in 1..num_groups, t in 1..num_time_slots)(group_in_room[g, r, t]) > 0)
+% 5. No two visitor groups meet more than once
+constraint forall(g1, g2 in 1..num_visitor_groups where g1 < g2)(
+    sum(t in 1..num_time_slots, r in 1..num_rooms)(groups_meet[g1,g2,t,r]) <= 1
 );
 
-% Constraint: Groups can only be assigned to used rooms
-constraint forall(g in 1..num_groups, r in valid_rooms, t in 1..num_time_slots) (
-    group_in_room[g, r, t] -> room_used[r]
+% 6. Room usage consistency
+constraint forall(r in 1..num_rooms)(
+    used[r] <-> exists(g in 1..num_visitor_groups, t in 1..num_time_slots)(schedule[g,t,r])
 );
 
-% Constraint: Ensure we have enough diversity - each group should visit multiple rooms
-constraint forall(g in 1..num_groups) (
-    sum(r in valid_rooms, t in 1..num_time_slots)(group_in_room[g, r, t]) >= min(num_time_slots, 3)
+% 7. Don't use rooms with zero capacity
+constraint forall(r in 1..num_rooms where capacity[r] = 0)(
+    used[r] = false
 );
 
-% Objective: Maximize free rooms (minimize used rooms)
-solve minimize sum(r in valid_rooms)(room_used[r]);
+% 8. Ensure minimum viable sessions (at least some groups must be scheduled)
+constraint sum(g in 1..num_visitor_groups, t in 1..num_time_slots, r in 1..num_rooms)(schedule[g,t,r]) >= num_visitor_groups * num_time_slots;
 
 % Output
 output [
-    "Number of groups: ", show(num_groups), "\n",
-    "Rooms used: ", show([r | r in valid_rooms where fix(room_used[r])]), "\n",
-    "Number of free rooms: ", show(num_valid_rooms - sum(r in valid_rooms)(fix(room_used[r]))), "\n",
-    "Schedule:\n"
+    "Used rooms: " ++ show([r | r in 1..num_rooms where fix(used[r])]) ++ "\n" ++
+    "Number of used rooms: " ++ show(fix(objective)) ++ "\n" ++
+    "Number of free rooms: " ++ show(num_rooms - fix(objective)) ++ "\n"
 ] ++
 [
-    "Time slot ", show(t), ":\n" ++
+    "Time slot " ++ show(t) ++ ":\n" ++
     concat([
-        "  Room ", show(r), ": Groups [" ++ 
-        concat([show(g) ++ " " | g in 1..fix(num_groups) where fix(group_in_room[g, r, t])]) ++
-        "]\n"
-        | r in valid_rooms where fix(room_used[r]) /\ sum(g in 1..fix(num_groups))(fix(group_in_room[g, r, t])) > 0
-    ])
+        "  Group " ++ show(g) ++ " -> Room " ++ show([r | r in 1..num_rooms where fix(schedule[g,t,r])])[1] ++ "\n"
+        | g in 1..num_visitor_groups
+    ]) ++ "\n"
     | t in 1..num_time_slots
 ];
 ```

@@ -1,73 +1,80 @@
-**Reasoning:**
+### Reasoning
 
-1. **Problem Understanding**: The printing firm needs to produce packaging for multiple product variations with identical dimensions but different text/color. Each mother sheet can print a fixed number of items (S), and each sheet is produced from a template that defines how many copies of each variation are printed on it. The goal is to decide the number of distinct templates and their configurations (how many copies of each variation) such that the demand for each variation is met.
+1. **Problem Understanding**: The problem involves deciding the number of distinct templates to produce and assigning variations to each template such that the order quantities are met. Each template has a fixed number of positions (P), and all variations have the same size, so each template can hold up to P copies of variations in total. The goal is to minimize the number of distinct templates (T) while meeting the demand for each variation.
 
-2. **Key Elements**:
-   - `V`: number of variations.
-   - `Q[v]`: demand for variation `v`.
-   - `S`: number of items per mother sheet (constant for all variations).
-   - Templates: each template is defined by a vector `c[t,v]` indicating the number of copies of variation `v` on template `t`, with `sum_v c[t,v] = S`.
-   - Usage: each template `t` can be used `x[t]` times, producing `x[t] * c[t,v]` items of variation `v`.
+2. **Key Variables**:
+   - `V`: Number of variations.
+   - `Q[i]`: Demand for variation `i`.
+   - `P`: Number of positions per mother sheet (fixed for all templates).
+   - `T`: Number of distinct templates to produce (decision variable to minimize).
+   - `n[i,t]`: Number of copies of variation `i` on template `t` (decision variable).
+   - `k[t]`: Number of times template `t` is used (decision variable).
+   - `used[t]`: Binary variable indicating if template `t` is used.
 
-3. **Decision Variables**:
-   - `x[t]`: number of times template `t` is used (non-negative integer).
-   - `c[t,v]`: number of copies of variation `v` on template `t` (integer between 0 and S).
-   - The number of distinct templates is the number of `t` where `x[t] > 0`.
+3. **Domains**:
+   - `used[t]`: Binary (0 or 1).
+   - `k[t]`: Integer from 0 to `K_max`, where `K_max = max(Q)` (since `k[t]` never needs to exceed the maximum demand).
+   - `n[i,t]`: Integer from 0 to `P` (since each template has exactly `P` positions when used).
 
 4. **Constraints**:
-   - For each template `t`, the sum of `c[t,v]` over all `v` must equal `S` (full sheet utilization).
-   - For each variation `v`, the total items produced must meet demand: `sum_t (x[t] * c[t,v]) >= Q[v]`.
-   - No two used templates can have the same configuration to avoid overcounting distinct templates: for any two templates `i` and `j` with identical `c[i]` and `c[j]`, at least one must have `x[i] = 0` or `x[j] = 0`.
+   - For each template `t`, if used, the sum of `n[i,t]` over all variations must equal `P`: `sum_i n[i,t] = P * used[t]`.
+   - If a template is not used, `n[i,t] = 0` for all `i` and `k[t] = 0`: enforced via `n[i,t] <= P * used[t]` and `k[t] <= K_max * used[t]`.
+   - Demand must be met for each variation `i`: `sum_t k[t] * n[i,t] >= Q[i]`.
 
-5. **Objective**: Minimize the number of distinct templates, i.e., minimize the count of `t` where `x[t] > 0`.
+5. **Objective**: Minimize the number of distinct templates: `minimize sum(used)`.
 
 6. **Modeling Choices**:
-   - Use a fixed upper bound for the number of templates (`MaxT = V`), as each variation could potentially have its own template.
-   - Set an upper bound for `x[t]` as the total demand (`total_demand = sum_v Q[v]`) since each sheet produces at least one item.
-   - Use constraints to enforce distinct configurations for used templates to ensure the count of distinct templates is accurate.
+   - Set `T_max = V` as the maximum number of templates, since `T` cannot exceed `V` (each variation must appear on at least one template, and with `P` positions, `T <= V` is sufficient).
+   - Use `K_max = max(Q)` to bound `k[t]`, as `k[t]` need not exceed the maximum demand value.
+   - The product `k[t] * n[i,t]` in the demand constraint is handled directly in MiniZinc, relying on the solver to manage nonlinearities.
 
-7. **Assumptions**:
-   - The model assumes that sheets are fully utilized (sum of `c[t,v]` is exactly `S` for all templates, even if unused).
-   - The problem is simplified to minimization of distinct templates without explicit costs; other objectives (e.g., minimize total sheets) can be added similarly.
+7. **Output**: The model outputs the number of templates used, and for each used template, the number of copies of each variation and how many times the template is used.
 
-**MiniZinc model:**
+### MiniZinc Model
+
 ```minizinc
 % Parameters
 int: V; % Number of variations
 array[1..V] of int: Q; % Demand for each variation
-int: S; % Number of items per mother sheet
+int: P; % Number of positions per mother sheet
 
 % Derived parameters
-int: total_demand = sum(v in 1..V) (Q[v]); % Total demand across all variations
-int: MaxT = V; % Maximum number of templates (upper bound)
+int: T_max = V; % Maximum number of templates
+int: K_max = max(Q); % Maximum value for k[t]
 
 % Decision variables
-array[1..MaxT] of var 0..total_demand: x; % x[t] = number of times template t is used
-array[1..MaxT, 1..V] of var 0..S: c; % c[t,v] = copies of variation v on template t
+array[1..T_max] of var 0..1: used; % 1 if template t is used, 0 otherwise
+array[1..T_max] of var 0..K_max: k; % Number of times template t is used
+array[1..V, 1..T_max] of var 0..P: n; % n[i,t] = copies of variation i on template t
 
-% Constraint: Each template must have exactly S items in total
-constraint forall(t in 1..MaxT) (
-    sum(v in 1..V) (c[t, v]) = S
+% Constraints
+% For each template, if used, total copies must equal P
+constraint forall(t in 1..T_max) (
+    sum(i in 1..V) n[i,t] == P * used[t]
 );
 
-% Constraint: Demand for each variation must be met
-constraint forall(v in 1..V) (
-    sum(t in 1..MaxT) (x[t] * c[t, v]) >= Q[v]
+% If template not used, k[t] must be 0
+constraint forall(t in 1..T_max) (
+    k[t] <= K_max * used[t]
 );
 
-% Constraint: No two used templates can have the same configuration
-constraint forall(i, j in 1..MaxT where i < j) (
-    (c[i] = c[j]) -> (x[i] = 0 \/ x[j] = 0)
+% Demand must be met for each variation
+constraint forall(i in 1..V) (
+    sum(t in 1..T_max) (k[t] * n[i,t]) >= Q[i]
 );
 
-% Objective: Minimize the number of distinct templates
-var int: num_templates = sum(t in 1..MaxT) (bool2int(x[t] > 0));
-solve minimize num_templates;
+% Objective: minimize number of templates used
+solve minimize sum(used);
 
-% Output (optional): Show the templates and their usage
+% Output
 output [
-    "Number of distinct templates: " ++ show(num_templates) ++ "\n",
-    "Template usage: " ++ show(x) ++ "\n",
-    "Template configurations: " ++ show2d(c) ++ "\n"
+    "Number of templates: ", show(sum(used)), "\n"
+] ++
+[
+    if used[t] == 1 then
+        "Template " ++ show(t) ++ " used " ++ show(k[t]) ++ " times with copies: " ++ 
+        show([n[i,t] | i in 1..V]) ++ "\n"
+    else ""
+    endif | t in 1..T_max
 ];
 ```

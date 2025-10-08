@@ -1,130 +1,128 @@
-### Reasoning
+**Reasoning:**
 
-1. **Problem Overview**: The problem involves scheduling visits from shoppers to sales people across 19 outlets in 4 geographic areas. The goal is to assign visits such that each sales person is visited by 4 different shoppers, with constraints on shopper groups, visit timing, and geographic distribution.
+1. **Problem Overview**: The problem involves scheduling visits from shoppers to sales people over 4 weeks, with constraints on the number of visits, grouping of shoppers, geographic areas, and timing. The goal is to find a feasible assignment of shoppers and weeks to visits for each sales person.
 
 2. **Key Entities**:
-   - **Outlets**: 19 outlets divided into 4 areas: Area 1 (outlets 1-5), Area 2 (6-10), Area 3 (11-15), Area 4 (16-19).
-   - **Sales People**: 35 total, with 1-4 per outlet. Each must be visited by 4 different shoppers.
-   - **Shoppers**: 40 shoppers divided into 4 groups of 10. Each group has 5 shoppers making 3 visits and 5 making 4 visits, totaling 140 visits.
-   - **Weeks**: Fieldwork lasts 4 weeks, with constraints on visits in the first 2 weeks.
+   - 19 outlets grouped into 4 areas: Area 1 (outlets 1-5), Area 2 (6-10), Area 3 (11-15), Area 4 (16-19).
+   - 35 sales people distributed across outlets (1-4 per outlet).
+   - 40 shoppers divided into 4 groups of 10. Each group has 5 shoppers with 3 visits and 5 with 4 visits.
+   - Total visits: 140 (4 per sales person).
 
 3. **Constraints**:
-   - Each sales person must be visited by shoppers from 4 different groups.
-   - Each shopper visits at most one outlet per geographic area.
-   - Each sales person must be visited exactly twice in the first 2 weeks.
-   - Shoppers making 4 visits must have exactly 2 visits in the first 2 weeks; those making 3 visits must have 1 or 2 visits in the first 2 weeks.
-   - The assignment must respect the grouping of shoppers and outlets.
+   - Each sales person is visited by 4 different shoppers.
+   - Each shopper visits at most one outlet per area (i.e., for each shopper and area, all visited sales people in that area must be from the same outlet).
+   - Each sales person must be visited exactly twice in weeks 1-2 and twice in weeks 3-4.
+   - For shoppers with 4 visits, exactly 2 visits must be in weeks 1-2 and 2 in weeks 3-4.
+   - For shoppers with 3 visits, 1 or 2 visits must be in weeks 1-2 (and the remainder in weeks 3-4).
+   - For each sales person, the four visiting shoppers must be from different groups (i.e., all four groups represented).
 
 4. **Modeling Decisions**:
-   - Use arrays to map outlets to areas and sales people to outlets as parameters.
-   - Define decision variables for shopper assignments and week assignments per sales person visit.
-   - Ensure alldifferent constraints for shoppers per sales person and groups per sales person.
-   - Use sum constraints to enforce visit counts and weekly visit distributions.
-   - For the area constraint, compute the number of distinct outlets per area per shopper and ensure it is at most 1.
+   - Use arrays `visit_shopper` and `visit_week` for each sales person (1-35) and each of their 4 visits. Domains: shoppers 1-40, weeks 1-4.
+   - Parameters define the mapping of outlets to areas, sales people to outlets, shopper groups, and visit counts.
+   - Constraints ensure:
+     - All shoppers for a sales person are distinct.
+     - Each shopper's total visits match their visit count.
+     - Weekly visit counts per sales person and shopper.
+     - Shoppers from different groups per sales person.
+     - For each shopper and area, at most one outlet is visited (using distinct outlets per area).
 
-5. **Simplifications**:
-   - Assume parameters like `sales_outlet` and `shopper_visits` are provided and valid.
-   - Use a satisfaction problem since no objective function is specified.
+5. **Assumptions**:
+   - The exact distribution of sales people per outlet and shopper groups/visit counts is provided as parameters and must satisfy the given totals and ranges.
+   - The model is for satisfaction since no optimization objective is specified.
 
-### MiniZinc Model
-
+**MiniZinc Model:**
 ```minizinc
-% Cosmetic Company Sales Evaluation Schedule
-% Parameters defining the problem instance
-
-% Number of outlets, sales people, shoppers, weeks, and groups
-int: num_outlets = 19;
-int: num_sales = 35;
+% Parameters
+int: num_sales_people = 35;
 int: num_shoppers = 40;
 int: num_weeks = 4;
-int: num_groups = 4;
-set of int: OUTLETS = 1..num_outlets;
-set of int: SALES = 1..num_sales;
-set of int: SHOPPERS = 1..num_shoppers;
-set of int: WEEKS = 1..num_weeks;
-set of int: GROUPS = 1..num_groups;
+int: num_areas = 4;
+int: num_outlets = 19;
 
-% Area for each outlet (1-4). Example: outlets 1-5 in area 1, etc.
-array[OUTLETS] of 1..num_groups: areas;
+% Area for each outlet (1-19)
+array[1..num_outlets] of 1..num_areas: area_of_outlet = 
+  [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4];
 
-% Outlet for each sales person (1-19)
-array[SALES] of OUTLETS: sales_outlet;
+% Outlet for each sales person (1-35), must be between 1 and 19
+array[1..num_sales_people] of 1..num_outlets: outlet_of_salesperson;
 
-% Group for each shopper (1-4)
-array[SHOPPERS] of GROUPS: shopper_group;
+% Group for each shopper (1-40), must be between 1 and 4
+array[1..num_shoppers] of 1..num_areas: group_for_shopper;
 
-% Number of visits per shopper (3 or 4). Must satisfy: for each group, exactly 5 shoppers have 3 visits and 5 have 4 visits.
-array[SHOPPERS] of 3..4: shopper_visits;
+% Visit count for each shopper (3 or 4)
+array[1..num_shoppers] of 3..4: visit_count;
 
-% Decision variables
-
-% shopper_assignment[s, v] = shopper for the v-th visit to sales person s
-array[SALES, 1..4] of var SHOPPERS: shopper_assignment;
-
-% week_assignment[s, v] = week for the v-th visit to sales person s
-array[SALES, 1..4] of var WEEKS: week_assignment;
+% Decision variables: for each sales person and each of their 4 visits, the shopper and week
+array[1..num_sales_people, 1..4] of var 1..num_shoppers: visit_shopper;
+array[1..num_sales_people, 1..4] of var 1..num_weeks: visit_week;
 
 % Constraints
 
-% 1. Each sales person is visited by 4 different shoppers
-constraint forall(s in SALES) (
-    alldifferent([shopper_assignment[s, v] | v in 1..4])
+% 1. For each sales person, the four shoppers must be distinct
+constraint forall(s in 1..num_sales_people) (
+    all_different([visit_shopper[s, v] | v in 1..4])
 );
 
-% 2. Each shopper makes the required number of visits
-constraint forall(sh in SHOPPERS) (
-    sum(s in SALES, v in 1..4) (shopper_assignment[s, v] == sh) = shopper_visits[sh]
+% 2. For each shopper, the total number of visits must match their visit_count
+constraint forall(sh in 1..num_shoppers) (
+    sum(s in 1..num_sales_people, v in 1..4) (visit_shopper[s, v] == sh) = visit_count[sh]
 );
 
-% 3. Each sales person is visited exactly twice in the first 2 weeks
-constraint forall(s in SALES) (
-    sum(v in 1..4) (week_assignment[s, v] <= 2) = 2
+% 3. For each sales person, exactly two visits in weeks 1-2 and two in weeks 3-4
+constraint forall(s in 1..num_sales_people) (
+    sum(v in 1..4) (visit_week[s, v] <= 2) = 2
 );
 
-% 4. Shoppers with 4 visits have exactly 2 visits in first 2 weeks; those with 3 visits have 1 or 2
-constraint forall(sh in SHOPPERS) (
+% 4. For each shopper, visits in weeks 1-2 must be 2 if visit_count=4, or 1 or 2 if visit_count=3
+constraint forall(sh in 1..num_shoppers) (
     let {
-        var int: visits_in_first2 = sum(s in SALES, v in 1..4) (
-            shopper_assignment[s, v] == sh /\ week_assignment[s, v] <= 2
+        var int: first_half = sum(s in 1..num_sales_people, v in 1..4) (
+            (visit_shopper[s, v] == sh) /\ (visit_week[s, v] <= 2)
         )
     } in
-    if shopper_visits[sh] == 4 then
-        visits_in_first2 = 2
+    if visit_count[sh] == 4 then
+        first_half = 2
     else
-        visits_in_first2 in 1..2
+        first_half in {1, 2}
     endif
 );
 
-% 5. Each sales person is visited by shoppers from 4 different groups
-constraint forall(s in SALES) (
-    alldifferent([shopper_group[shopper_assignment[s, v]] | v in 1..4])
+% 5. For each sales person, the four shoppers must be from different groups
+constraint forall(s in 1..num_sales_people) (
+    all_different([group_for_shopper[visit_shopper[s, v]] | v in 1..4])
 );
 
-% 6. Each shopper visits at most one outlet per geographic area
-constraint forall(sh in SHOPPERS, a in GROUPS) (
-    sum(o in OUTLETS where areas[o] == a) (
-        exists(s in SALES where sales_outlet[s] == o) (
-            exists(v in 1..4)(shopper_assignment[s, v] == sh)
-        )
-    ) <= 1
+% 6. For each shopper and each area, at most one outlet is visited in that area
+constraint forall(sh in 1..num_shoppers, a in 1..num_areas) (
+    card( { outlet_of_salesperson[s] | s in 1..num_sales_people, v in 1..4 
+            where visit_shopper[s, v] == sh /\ area_of_outlet[outlet_of_salesperson[s]] == a } ) <= 1
 );
 
-% Solve satisfaction problem
+% Additional data constraints on parameters (commented out if data is provided separately)
+% constraint forall(o in 1..num_outlets) (
+%     1 <= sum(s in 1..num_sales_people) (outlet_of_salesperson[s] == o) <= 4
+% );
+% constraint sum(s in 1..num_sales_people) (1) = num_sales_people;
+% constraint forall(g in 1..num_areas) (
+%     sum(sh in 1..num_shoppers) (group_for_shopper[sh] == g) = 10
+% );
+% constraint forall(g in 1..num_areas) (
+%     sum(sh in 1..num_shoppers) (group_for_shopper[sh] == g /\ visit_count[sh] == 3) = 5
+% );
+% constraint forall(g in 1..num_areas) (
+%     sum(sh in 1..num_shoppers) (group_for_shopper[sh] == g /\ visit_count[sh] == 4) = 5
+% );
+
+% Solve for satisfaction
 solve satisfy;
 
-% Output: Display assignments for each sales person
+% Output (optional): display the assignment for each sales person
 output [
-    "Sales person ", show(s), " visited by shoppers ", 
-    show([shopper_assignment[s, v] | v in 1..4]), 
-    " in weeks ", show([week_assignment[s, v] | v in 1..4]), "\n"
-    | s in SALES
+    "Sales person ", show(s), ": visits by shoppers ", 
+    show([visit_shopper[s, v] | v in 1..4]), 
+    " in weeks ", show([visit_week[s, v] | v in 1..4]), "\n"
+    | s in 1..num_sales_people
 ];
 ```
 
-**Note**: This model requires a data file to define the parameters `areas`, `sales_outlet`, `shopper_group`, and `shopper_visits`. For example, a data file might include:
-```minizinc
-areas = [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4];
-sales_outlet = [1,1,1,2,2,2,3,3,4,4,5,5,6,6,6,7,7,8,8,9,9,10,10,11,11,11,12,12,13,13,14,14,15,15,16]; % example assignment
-shopper_group = [1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4]; % example groups
-shopper_visits = [3,3,3,3,3,4,4,4,4,4,3,3,3,3,3,4,4,4,4,4,3,3,3,3,3,4,4,4,4,4,3,3,3,3,3,4,4,4,4,4]; % example visits
-```
+**Note**: The model includes parameters that must be provided with data satisfying the constraints (e.g., `outlet_of_salesperson`, `group_for_shopper`, `visit_count`). The commented constraints ensure parameter validity if included. The output displays the assignment for each sales person.

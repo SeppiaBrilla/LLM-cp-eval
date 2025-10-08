@@ -1,106 +1,97 @@
 **Reasoning:**
 
-1. **Decision Variables:**
-   - We need to decide how many frames to use (let's call this `num_frames`)
-   - For each frame and each variation, we need to decide how many copies of that variation to place on the frame
-   - We also need binary variables to track which frames are actually used
+1. **Decision Variables**: We need to determine:
+   - How many frames to use (this will be minimized)
+   - For each frame, which variations to include and how many of each
+   - The assignment of variations to frames
 
-2. **Parameters/Input Data:**
-   - Number of different variations in the set
-   - Demand for each variation (how many panels of each type are needed)
-   - Maximum capacity of each frame (how many panels total can fit on one frame)
-   - Cost considerations (minimize number of frames used)
+2. **Problem Structure**: This is a bin packing variant where:
+   - Items are the required quantities of each variation
+   - Bins are the frames (with capacity constraints)
+   - We want to minimize the number of frames used
 
-3. **Domains:**
-   - Number of frames: 1 to some reasonable upper bound (could be total demand)
-   - Panels per variation per frame: 0 to minimum of (demand for that variation, frame capacity)
-   - Frame usage: binary (0 or 1)
+3. **Key Constraints**:
+   - Each frame has a maximum capacity (number of panels it can hold)
+   - We must produce at least the required quantity of each variation
+   - Each variation can be split across multiple frames if needed
 
-4. **Constraints:**
-   - Demand satisfaction: Total panels produced for each variation across all frames must meet or exceed demand
-   - Capacity constraint: Total panels on each frame cannot exceed frame capacity
-   - Frame usage logic: If any panels are placed on a frame, that frame must be marked as used
-   - Symmetry breaking: Frames should be used in order (frame i can only be used if frame i-1 is used)
+4. **Variables and Domains**:
+   - `num_frames`: integer variable representing total frames used
+   - `frame_usage[f, v]`: how many of variation v are placed on frame f
+   - `frame_used[f]`: boolean indicating if frame f is used
 
-5. **Objective:**
-   - Minimize the number of frames used (cost minimization)
+5. **Objective**: Minimize the number of frames used
 
-6. **Modeling Choices:**
-   - We'll use a maximum possible number of frames as an upper bound
-   - We'll assume all variations have the same physical size (as stated in the problem)
+6. **Modeling Choices**:
+   - Set an upper bound on frames (worst case: one frame per variation)
+   - Use a capacity constraint per frame
+   - Ensure demand satisfaction for each variation
+   - Link frame usage to actual placement of variations
 
 **MiniZinc Model:**
 
 ```minizinc
-% Paper Panel Frame Optimization
+% Paper Panel Manufacturing Frame Optimization
 % Minimize the number of frames needed to produce required panel variations
 
 % Parameters
-int: num_variations;  % Number of different panel variations
-array[1..num_variations] of int: demand;  % Demand for each variation
-int: frame_capacity;  % Maximum panels that can fit on one frame
+int: num_variations;                    % Number of different panel variations
+int: frame_capacity;                    % Maximum panels per frame
+array[1..num_variations] of int: demand; % Required quantity of each variation
 
-% Upper bound on frames needed (worst case: one panel per frame)
-int: max_frames = sum(demand);
+% Upper bound on frames needed (worst case: one frame per variation)
+int: max_frames = num_variations;
 
-% Decision variables
-var 1..max_frames: num_frames_used;  % Number of frames actually used
-array[1..max_frames] of var 0..1: frame_used;  % Whether each frame is used
-array[1..max_frames, 1..num_variations] of var 0..frame_capacity: panels_on_frame;
+% Decision Variables
+var 1..max_frames: num_frames;          % Number of frames to use
+array[1..max_frames, 1..num_variations] of var 0..frame_capacity: frame_usage;
+array[1..max_frames] of var bool: frame_used;
 
 % Constraints
 
-% Demand satisfaction: total production must meet demand
-constraint forall(v in 1..num_variations) (
-    sum(f in 1..max_frames) (panels_on_frame[f, v]) >= demand[v]
+% Frame capacity constraint: each frame cannot exceed its capacity
+constraint forall(f in 1..max_frames)(
+    sum(v in 1..num_variations)(frame_usage[f, v]) <= frame_capacity
 );
 
-% Frame capacity: total panels on each frame cannot exceed capacity
-constraint forall(f in 1..max_frames) (
-    sum(v in 1..num_variations) (panels_on_frame[f, v]) <= frame_capacity
+% Demand satisfaction: produce at least the required quantity of each variation
+constraint forall(v in 1..num_variations)(
+    sum(f in 1..max_frames)(frame_usage[f, v]) >= demand[v]
 );
 
-% Frame usage logic: if any panels are on a frame, it must be marked as used
-constraint forall(f in 1..max_frames) (
-    (sum(v in 1..num_variations) (panels_on_frame[f, v]) > 0) <-> frame_used[f] = 1
+% Frame usage linking: if any variation is placed on frame f, then frame f is used
+constraint forall(f in 1..max_frames)(
+    frame_used[f] <-> sum(v in 1..num_variations)(frame_usage[f, v]) > 0
 );
 
-% Symmetry breaking: use frames in order
-constraint forall(f in 2..max_frames) (
-    frame_used[f] <= frame_used[f-1]
+% Frame ordering: use frames in order (symmetry breaking)
+constraint forall(f in 1..max_frames-1)(
+    frame_used[f+1] -> frame_used[f]
 );
 
-% Count the number of frames used
-constraint num_frames_used = sum(f in 1..max_frames) (frame_used[f]);
-
-% Additional constraint: don't overproduce too much
-constraint forall(v in 1..num_variations) (
-    sum(f in 1..max_frames) (panels_on_frame[f, v]) <= demand[v] + frame_capacity
-);
+% Count used frames
+constraint num_frames = sum(f in 1..max_frames)(frame_used[f]);
 
 % Objective: minimize number of frames
-solve minimize num_frames_used;
+solve minimize num_frames;
 
 % Output
 output [
-    "Number of frames used: \(num_frames_used)\n",
-    "Frame layouts:\n"
+    "Number of frames used: \(num_frames)\n",
+    "Frame assignments:\n"
 ] ++
 [
-    if frame_used[f] = 1 then
+    if frame_used[f] then
         "Frame \(f): " ++ 
-        concat([if panels_on_frame[f, v] > 0 then 
-                   "Variation\(v)=\(panels_on_frame[f, v]) " 
-                else "" endif | v in 1..num_variations]) ++ 
-        " (Total: \(sum(v in 1..num_variations)(panels_on_frame[f, v])))\n"
+        concat([if frame_usage[f,v] > 0 then "Variation \(v): \(frame_usage[f,v]) panels, " else "" endif | v in 1..num_variations]) ++
+        " (Total: \(sum(v in 1..num_variations)(frame_usage[f,v])) panels)\n"
     else ""
-    endif | f in 1..max_frames
+    endif
+    | f in 1..max_frames
 ];
 
-% Example data (uncomment and modify as needed):
-/*
-num_variations = 4;
-demand = [12, 8, 15, 6];
-frame_capacity = 20;
-*/
+% Example data (uncomment to test)
+% num_variations = 4;
+% frame_capacity = 10;
+% demand = [8, 5, 12, 3];
 ```

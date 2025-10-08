@@ -1,63 +1,66 @@
 Reasoning:
 
 1. Decision Variables:
-   - `host[i]`: A binary variable for each boat `i` that indicates whether it is a host or not.
-   - `visit[i,j,t]`: A binary variable for each boat `i`, host `j`, and time period `t` that indicates whether boat `i` visits host `j` at time `t`.
+   - A binary variable `host[i]` for each boat `i` to indicate whether it is a host or not.
+   - A binary variable `visit[i,j,t]` for each boat `i`, `j` and time period `t` to indicate whether boat `i` visits boat `j` at time `t`.
 
 2. Domains:
-   - The domain of `host[i]` is `{0,1}`.
-   - The domain of `visit[i,j,t]` is `{0,1}`.
+   - The domain of `host[i]` is `{0,1}` where `1` indicates that boat `i` is a host and `0` otherwise.
+   - The domain of `visit[i,j,t]` is `{0,1}` where `1` indicates that boat `i` visits boat `j` at time `t` and `0` otherwise.
 
 3. Constraints:
+   - A boat can only visit another boat if the other boat is a host.
    - A boat cannot visit itself.
-   - The total number of people on a host boat at any time period must not exceed its capacity.
+   - The total number of people on a boat at any time period must not exceed its capacity.
    - A guest boat cannot revisit a host.
    - Guest crews cannot meet more than once.
-   - A boat can only be a host if its capacity is greater than its crew size.
-   - A boat can only visit a host if the host's capacity is greater than the boat's crew size.
 
 4. Objective Function:
    - The objective is to minimize the number of host boats.
 
-5. Simplifications/Modeling Choices:
-   - We can model the problem as a binary integer programming problem.
-   - We can use the sum of the `host` variables as the objective function.
-   - We can use the `sum` function to enforce the capacity constraints.
-   - We can use the `forall` function to enforce the visitation constraints.
+5. Simplifications or Modeling Choices:
+   - We can assume that the number of time periods is fixed and known in advance.
+   - We can also assume that the capacities and crew sizes of the boats are fixed and known in advance.
 
 MiniZinc model:
 
 ```minizinc
-% Number of boats and time periods
-int: n = 42;
-int: t = 6;
+% Parameters
+int: n = 42; % number of boats
+int: t = 6; % number of time periods
+array[1..n] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0]; % capacity of each boat
+array[1..n] of int: crew_size = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4]; % crew size of each boat
 
-% Boat capacities and crew sizes
-array[1..n] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0];
-array[1..n] of int: crew = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
-
-% Decision variables
-array[1..n] of var 0..1: host;
-array[1..n, 1..n, 1..t] of var 0..1: visit;
+% Decision Variables
+array[1..n] of var 0..1: host; % whether each boat is a host
+array[1..n, 1..n, 1..t] of var 0..1: visit; % whether each boat visits another boat at each time period
 
 % Constraints
-constraint forall(i in 1..n) (
-  host[i] = 1 -> capacity[i] > crew[i]
-);
 constraint forall(i in 1..n, j in 1..n, k in 1..t) (
-  visit[i,j,k] = 1 -> (host[j] = 1 /\ i != j /\ capacity[j] > crew[i])
-);
-constraint forall(i in 1..n, j in 1..n) (
-  sum(k in 1..t) (visit[i,j,k]) <= 1
-);
-constraint forall(i in 1..n, k in 1..t) (
-  sum(j in 1..n) (visit[i,j,k]) <= 1
-);
-constraint forall(j in 1..n, k in 1..t) (
-  sum(i in 1..n) (visit[i,j,k]*crew[i]) <= capacity[j] - crew[j]*host[j]
+  visit[i,j,k] <= host[j] % a boat can only visit another boat if the other boat is a host
 );
 
-% Objective function
+constraint forall(i in 1..n, k in 1..t) (
+  visit[i,i,k] = 0 % a boat cannot visit itself
+);
+
+constraint forall(j in 1..n, k in 1..t) (
+  sum(i in 1..n) (visit[i,j,k] * crew_size[i]) + host[j] * crew_size[j] <= capacity[j] % the total number of people on a boat at any time period must not exceed its capacity
+);
+
+constraint forall(i in 1..n, j in 1..n) (
+  sum(k in 1..t) (visit[i,j,k]) <= 1 % a guest boat cannot revisit a host
+);
+
+constraint forall(i in 1..n, k in 1..t) (
+  sum(j in 1..n) (visit[i,j,k]) <= 1 % a guest boat can only visit one host at a time
+);
+
+constraint forall(i in 1..n, j in 1..n) (
+  sum(k in 1..t) (visit[i,j,k] + visit[j,i,k]) <= 1 % guest crews cannot meet more than once
+);
+
+% Objective
 var int: num_hosts = sum(i in 1..n) (host[i]);
 solve minimize num_hosts;
 ```

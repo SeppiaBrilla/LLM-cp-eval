@@ -13,6 +13,21 @@ Output format:
 - First: **Reasoning** section in clear step-by-step markdown (numbered or bulleted; not in code block).
 - Then: **MiniZinc model** section, output as a full .mzn file (use a code block for the MiniZinc code, appropriately commented where necessary).
 
+Example Input:
+Describe problem x.
+
+Example Output:
+Reasoning:
+1. ...
+2. ...
+3. ...
+4. ...
+
+MiniZinc model:
+```minizinc
+%minizinc model
+```
+
 Important:
 - Never produce code before showing your reasoning.
 - Always present the reasoning first, then the code.

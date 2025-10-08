@@ -1,85 +1,58 @@
 **Reasoning:**
 
-1. **Problem Analysis**: 
-   - There are 32 scientists. Each week, they are divided into teams of 4, resulting in 8 teams per week.
-   - The goal is to maximize the number of weeks such that no two scientists are in the same team more than once. This ensures diverse collaborations.
+1. **Problem Analysis**: The problem involves scheduling weekly sessions for 32 scientists, divided into teams of 4 each week. The goal is to maximize the number of weeks (w) such that no two scientists are in the same team more than once. This is a classic Social Golfer Problem (SGP) with parameters: group size g=4, number of groups per round s=8 (since 32/4=8), and number of rounds w.
 
-2. **Key Constraints**:
-   - **Team Size**: Each week, if used, must have exactly 8 teams, each with exactly 4 scientists.
-   - **Pair Occurrence**: For any pair of scientists, they can be in the same team in at most one week.
+2. **Maximum Possible w**: The total number of unique scientist pairs is C(32,2) = 496. Each week, with 8 teams of 4, the number of pairs covered is 8 * C(4,2) = 48. Since no pair can be repeated, w must satisfy w * 48 ≤ 496, so w ≤ floor(496/48) = 10. Thus, the theoretical maximum w is 10.
 
-3. **Mathematical Insights**:
-   - Total possible pairs of scientists: \( \binom{32}{2} = 496 \).
-   - Pairs covered per week: 8 teams × \( \binom{4}{2} = 8 \times 6 = 48 \) pairs.
-   - Theoretical maximum weeks: \( \lfloor 496 / 48 \rfloor = 10 \). Thus, at most 10 weeks might be possible.
+3. **Decision Variables**: We define a 2D array `assign` where `assign[week, scientist]` represents the team number (1 to 8) for each scientist in each week. This allows us to model the team assignments directly.
 
-4. **Modeling Decisions**:
-   - Set `max_weeks = 10` as an upper bound.
-   - Define a binary array `used` for weeks, where `used[w]` is true if week `w` is scheduled.
-   - Define a 2D array `assign` where `assign[w, s]` is the team (1..8) for scientist `s` in week `w`.
-   - **Constraints**:
-     - For each week `w`, if `used[w]` is true, then each team `t` in 1..8 must have exactly 4 scientists assigned to it.
-     - For each pair of scientists `(s1, s2)` with `s1 < s2`, the number of weeks where both are in the same team and the week is used must be at most 1.
-   - **Objective**: Maximize the number of used weeks, i.e., the sum of `used`.
+4. **Domains**: Each element in `assign` is an integer from 1 to 8, representing the team assignments for 32 scientists over w weeks.
 
-5. **Implementation Notes**:
-   - Use `count` constraints to enforce team sizes.
-   - Use a nested loop and `bool2int` to compute pair occurrences.
-   - The model allows unused weeks to have arbitrary assignments without affecting the pair constraints.
+5. **Constraints**:
+   - **Partition Constraint**: For each week and each team, exactly 4 scientists must be assigned to that team. This ensures valid team formations each week.
+   - **Pairwise Constraint**: For every pair of distinct scientists, the number of weeks they are in the same team is at most 1. This ensures no repeated collaborations.
 
-**MiniZinc model:**
+6. **Objective Handling**: Since MiniZinc requires fixed array sizes, w is treated as a parameter. The model checks feasibility for a given w. To maximize w, run the model for w=10, and if unsatisfiable, decrement w until a solution is found. The model itself is a satisfaction problem with no objective function; the objective is achieved externally by iterating over w.
+
+7. **Symmetry Breaking**: No additional symmetry-breaking constraints are added here for simplicity, as the problem size is manageable, but they could be incorporated if needed for performance.
+
+**MiniZinc Model:**
+
 ```minizinc
-% Maximizing weekly team assignments for 32 scientists with no repeated pairs
-include "globals.mzn";
-
 % Parameters
-int: num_scientists = 32;
-int: teams_per_week = 8;
-int: team_size = 4;
-int: max_weeks = 10; % Upper bound based on pair coverage
+int: w; % Number of weeks (to be set externally; try from 10 down to 1)
+int: n = 32; % Number of scientists
+int: g = 4; % Group size (scientists per team)
+int: s = 8; % Number of teams per week (since n = g * s)
 
-% Decision variables
-array[1..max_weeks] of var bool: used; % true if week w is used
-array[1..max_weeks, 1..num_scientists] of var 1..teams_per_week: assign;
-% assign[w, s] is the team for scientist s in week w
-
-% Derived variable: number of weeks used
-var int: weeks_used = sum(used);
-
-% Objective: maximize the number of weeks used
-solve maximize weeks_used;
+% Decision variables: assign[week, scientist] -> team number (1..s)
+array[1..w, 1..n] of var 1..s: assign;
 
 % Constraints
 
-% For each week, if used, ensure each team has exactly team_size scientists
-constraint forall (w in 1..max_weeks) (
-    used[w] -> forall (t in 1..teams_per_week) (
-        count([assign[w, s] | s in 1..num_scientists], t, team_size)
-    )
+% Each week, each team has exactly g scientists
+constraint forall(week in 1..w, team in 1..s) (
+    count(i in 1..n)(assign[week, i] == team) == g
 );
 
-% For each pair of scientists, they are in the same team at most once in used weeks
-constraint forall (s1, s2 in 1..num_scientists where s1 < s2) (
-    sum(w in 1..max_weeks) (
-        bool2int(used[w] and (assign[w, s1] == assign[w, s2]))
-    ) <= 1
+% No two scientists are in the same team more than once
+constraint forall(i in 1..n, j in i+1..n) (
+    sum(week in 1..w)(assign[week, i] == assign[week, j]) <= 1
 );
 
-% Symmetry breaking: for unused weeks, fix assignments to reduce search space
-% Optional: can help solvers but not necessary for correctness
-% constraint forall (w in 1..max_weeks) (
-%     not used[w] -> forall (s in 1..num_scientists) ( assign[w, s] = 1 )
-% );
+% Solve statement: satisfy the constraints (no objective since w is fixed)
+solve satisfy;
 
-% Output: show the assignments for used weeks only
+% Output: Display the team assignments for each week
 output [
-    "Weeks used: ", show(weeks_used), "\n",
-    "Assignments (week, scientist -> team):\n"
-] ++ [
-    if used[w] then
-        show([assign[w, s] | s in 1..num_scientists]) ++ "\n"
-    else
-        ""
-    endif | w in 1..max_weeks
-];
+    "Schedule for " ++ show(w) ++ " weeks:\n"] ++
+    [ "Week " ++ show(week) ++ ": " ++ 
+      show([assign[week, i] | i in 1..n]) ++ "\n"
+      | week in 1..w
+    ];
 ```
+
+**Usage Notes:**
+- Set `w` to the desired number of weeks (e.g., 10, 9, ...) when running the model.
+- The model outputs a schedule if satisfiable, showing team assignments for each week.
+- To maximize w, run the model sequentially for w=10,9,... until a solution is found. The first satisfiable w is the maximum.

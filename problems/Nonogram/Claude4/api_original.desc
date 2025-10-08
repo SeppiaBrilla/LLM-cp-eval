@@ -1,104 +1,136 @@
 **Reasoning:**
 
-1. **Decision variables**: We need a 2D array representing the grid where each cell can be either shaded (1) or unshaded (0). Let's assume an n×m grid.
+1. **Decision Variables**: We need a 2D array of boolean variables representing whether each cell in the grid is shaded (1) or unshaded (0).
 
-2. **Domains**: Each cell is binary: 0 (unshaded) or 1 (shaded).
+2. **Input Parameters**: 
+   - Grid dimensions (rows and columns)
+   - Row constraints: for each row, a sequence of block lengths
+   - Column constraints: for each column, a sequence of block lengths
 
-3. **Constraints**: 
-   - For each row, the sequence of consecutive shaded blocks must match the given constraint sequence
-   - For each column, the sequence of consecutive shaded blocks must match the given constraint sequence
-   - Between consecutive blocks, there must be at least one unshaded cell (gap)
+3. **Constraint Modeling**: For each row and column, we need to ensure that:
+   - The shaded cells form exactly the specified number of blocks
+   - Each block has exactly the specified length
+   - Blocks are separated by at least one unshaded cell
+   - All shaded cells belong to one of the specified blocks
 
-4. **Modeling approach**: 
-   - We need to encode that a sequence like [3,1,2] means exactly 3 consecutive 1s, then at least one 0, then exactly 1 consecutive 1, then at least one 0, then exactly 2 consecutive 1s
-   - We can use regular expressions or create auxiliary variables to track block positions
-   - A simpler approach is to use the `regular` constraint with finite automata that recognize valid patterns
+4. **Key Constraint Approach**: For each row/column, we can model this by:
+   - Identifying the start positions of each block
+   - Ensuring blocks don't overlap and have proper gaps
+   - Ensuring the total pattern matches the constraint sequence
 
-5. **Problem type**: This is a constraint satisfaction problem (no optimization objective).
+5. **Domain Considerations**: 
+   - Grid cells are binary (0 or 1)
+   - Block start positions must be within valid ranges
+   - Need to handle cases where constraint sequences are empty (no shaded cells)
 
-6. **Implementation considerations**: 
-   - We'll need to convert each row/column constraint into a regular expression or automaton
-   - The regular constraint in MiniZinc can handle this elegantly
-   - We need to handle the case where constraints might be empty (no shaded blocks)
+6. **Modeling Strategy**: Use auxiliary variables for block start positions and enforce that the shaded pattern exactly matches the required block sequence.
 
-**MiniZinc model:**
+**MiniZinc Model:**
 
 ```minizinc
-% Nonogram solver
-% Grid dimensions
+% Nonogram Solver
+% Parameters - these would be provided as data
 int: rows;
 int: cols;
 
-% The grid: 0 = unshaded, 1 = shaded
+% Maximum number of blocks in any row/column constraint
+int: max_blocks;
+
+% Row constraints: row_blocks[i,j] gives the length of the j-th block in row i
+% 0 means no block (for padding when rows have different numbers of blocks)
+array[1..rows, 1..max_blocks] of int: row_blocks;
+array[1..rows] of int: row_num_blocks; % actual number of blocks in each row
+
+% Column constraints
+array[1..cols, 1..max_blocks] of int: col_blocks;
+array[1..cols] of int: col_num_blocks; % actual number of blocks in each column
+
+% Decision variables
 array[1..rows, 1..cols] of var 0..1: grid;
 
-% Row constraints - each row has a sequence of block lengths
-array[1..rows] of var set of int: row_constraints;
-array[1..cols] of var set of int: col_constraints;
+% Auxiliary variables for block start positions
+array[1..rows, 1..max_blocks] of var 1..cols: row_starts;
+array[1..cols, 1..max_blocks] of var 1..rows: col_starts;
 
-% Helper function to create automaton for a sequence of blocks
-function var int: create_block_automaton(array[int] of int: blocks, int: length) =
-  let {
-    % Create states for the automaton
-    % State 0: initial state (can have leading zeros)
-    % States 1..n: processing blocks
-    % Final state: accepting state (can have trailing zeros)
-    
-    % For simplicity, we'll use a different approach with regular expressions
-    % This is a placeholder - actual implementation would need more complex automaton
-  } in 0;
-
-% Constraint for each row
+% Constraint: each row satisfies its block pattern
 constraint forall(r in 1..rows) (
-  let {
-    array[int] of int: blocks = [i | i in row_constraints[r]];
-    array[1..cols] of var 0..1: row_r = [grid[r,c] | c in 1..cols];
-  } in
-  % This constraint ensures the row matches the block pattern
-  % Implementation depends on how constraints are specified
-  true  % Placeholder - would need actual regular constraint
+    if row_num_blocks[r] = 0 then
+        % No blocks in this row - all cells must be 0
+        forall(c in 1..cols) (grid[r,c] = 0)
+    else
+        % Ensure blocks are properly positioned and separated
+        forall(b in 1..row_num_blocks[r]) (
+            % Block b starts at row_starts[r,b] and has length row_blocks[r,b]
+            row_starts[r,b] + row_blocks[r,b] - 1 <= cols /\
+            % All cells in the block are shaded
+            forall(offset in 0..row_blocks[r,b]-1) (
+                grid[r, row_starts[r,b] + offset] = 1
+            )
+        ) /\
+        % Blocks are ordered and separated
+        forall(b in 1..row_num_blocks[r]-1) (
+            row_starts[r,b] + row_blocks[r,b] < row_starts[r,b+1]
+        ) /\
+        % Cells before first block are unshaded
+        forall(c in 1..row_starts[r,1]-1) (
+            grid[r,c] = 0
+        ) /\
+        % Cells after last block are unshaded
+        forall(c in row_starts[r,row_num_blocks[r]] + row_blocks[r,row_num_blocks[r]]..cols) (
+            grid[r,c] = 0
+        ) /\
+        % Cells between blocks are unshaded
+        forall(b in 1..row_num_blocks[r]-1) (
+            forall(c in row_starts[r,b] + row_blocks[r,b]..row_starts[r,b+1]-1) (
+                grid[r,c] = 0
+            )
+        )
+    endif
 );
 
-% Constraint for each column  
+% Constraint: each column satisfies its block pattern
 constraint forall(c in 1..cols) (
-  let {
-    array[int] of int: blocks = [i | i in col_constraints[c]];
-    array[1..rows] of var 0..1: col_c = [grid[r,c] | r in 1..rows];
-  } in
-  % This constraint ensures the column matches the block pattern
-  % Implementation depends on how constraints are specified  
-  true  % Placeholder - would need actual regular constraint
+    if col_num_blocks[c] = 0 then
+        % No blocks in this column - all cells must be 0
+        forall(r in 1..rows) (grid[r,c] = 0)
+    else
+        % Ensure blocks are properly positioned and separated
+        forall(b in 1..col_num_blocks[c]) (
+            % Block b starts at col_starts[c,b] and has length col_blocks[c,b]
+            col_starts[c,b] + col_blocks[c,b] - 1 <= rows /\
+            % All cells in the block are shaded
+            forall(offset in 0..col_blocks[c,b]-1) (
+                grid[col_starts[c,b] + offset, c] = 1
+            )
+        ) /\
+        % Blocks are ordered and separated
+        forall(b in 1..col_num_blocks[c]-1) (
+            col_starts[c,b] + col_blocks[c,b] < col_starts[c,b+1]
+        ) /\
+        % Cells before first block are unshaded
+        forall(r in 1..col_starts[c,1]-1) (
+            grid[r,c] = 0
+        ) /\
+        % Cells after last block are unshaded
+        forall(r in col_starts[c,col_num_blocks[c]] + col_blocks[c,col_num_blocks[c]]..rows) (
+            grid[r,c] = 0
+        ) /\
+        % Cells between blocks are unshaded
+        forall(b in 1..col_num_blocks[c]-1) (
+            forall(r in col_starts[c,b] + col_blocks[c,b]..col_starts[c,b+1]-1) (
+                grid[r,c] = 0
+            )
+        )
+    endif
 );
 
-% Example with concrete constraints for a 5x5 grid
-% Uncomment and modify as needed:
-/*
-rows = 5;
-cols = 5;
-
-% Example row constraints: [2,1], [1,1], [3], [1], [2]
-constraint regular([grid[1,c] | c in 1..cols], 
-  "0*1{2}0+1{1}0*");  % Row 1: block of 2, gap, block of 1
-constraint regular([grid[2,c] | c in 1..cols], 
-  "0*1{1}0+1{1}0*");  % Row 2: block of 1, gap, block of 1
-constraint regular([grid[3,c] | c in 1..cols], 
-  "0*1{3}0*");        % Row 3: block of 3
-constraint regular([grid[4,c] | c in 1..cols], 
-  "0*1{1}0*");        % Row 4: block of 1
-constraint regular([grid[5,c] | c in 1..cols], 
-  "0*1{2}0*");        % Row 5: block of 2
-
-% Example column constraints would be similar
-*/
-
+% This is a satisfaction problem - we just need to find a valid solution
 solve satisfy;
 
-% Output formatting
+% Output the solution
 output [
-  if c = 1 then "\n" else "" endif ++
-  if grid[r,c] = 1 then "█" else "·" endif
-  | r in 1..rows, c in 1..cols
+    if c = 1 then "\n" else "" endif ++
+    if grid[r,c] = 1 then "█" else "·" endif
+    | r in 1..rows, c in 1..cols
 ] ++ ["\n"];
 ```
-
-Note: This model provides the framework but requires specific constraint data to be complete. The regular expressions would need to be properly constructed based on the actual block sequences for each row and column. For a complete implementation, you would replace the placeholder constraints with actual regular expressions or use a more sophisticated automaton-based approach to encode the nonogram rules.

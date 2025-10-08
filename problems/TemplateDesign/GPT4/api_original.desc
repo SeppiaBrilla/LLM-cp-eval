@@ -5,52 +5,54 @@ Reasoning:
    - The number of copies of each variation to include on each template.
 
 2. Domains:
-   - The number of distinct templates is a positive integer.
-   - The number of copies of each variation on each template is a positive integer.
+   - The number of distinct templates to produce: This is a positive integer.
+   - The number of copies of each variation to include on each template: This is a positive integer.
 
 3. Constraints:
    - The total number of copies of each variation must meet the demand for that variation.
-   - The total number of variations on a template must not exceed the maximum number of items that can be printed on a mother sheet.
+   - The total number of variations on each template must not exceed the maximum number of variations that can fit on a template.
 
-4. This is an optimization problem. The objective is to minimize the number of distinct templates produced.
+4. Objective Function:
+   - Minimize the number of distinct templates produced.
 
-5. Simplifications/Modeling Choices:
-   - We can assume that the demand for each variation is known and fixed.
-   - We can assume that the maximum number of items that can be printed on a mother sheet is known and fixed.
+5. Simplifications or Modeling Choices:
+   - We can assume that the number of copies of each variation on a template is the same for all variations on that template. This simplifies the problem by reducing the number of decision variables.
 
 MiniZinc model:
 
 ```minizinc
-% Number of variations
-int: n_variations;
+% Define the number of variations and the maximum number of variations per template
+int: num_variations;
+int: max_variations_per_template;
 
-% Demand for each variation
-array[1..n_variations] of int: demand;
+% Define the demand for each variation
+array[1..num_variations] of int: demand;
 
-% Maximum number of items that can be printed on a mother sheet
-int: max_items;
+% Decision variables
+% The number of distinct templates to produce
+var 1..num_variations: num_templates;
 
-% Number of distinct templates
-var 1..n_variations: n_templates;
+% The number of copies of each variation to include on each template
+array[1..num_variations] of var 0..max_variations_per_template: copies_per_template;
 
-% Number of copies of each variation on each template
-array[1..n_variations, 1..n_templates] of var 0..max_items: copies;
-
+% Constraints
 % The total number of copies of each variation must meet the demand for that variation
-constraint forall(i in 1..n_variations) (
-  sum(j in 1..n_templates) (copies[i, j]) = demand[i]
+constraint forall(i in 1..num_variations) (
+  sum(j in 1..num_templates) (copies_per_template[j]) >= demand[i]
 );
 
-% The total number of variations on a template must not exceed the maximum number of items that can be printed on a mother sheet
-constraint forall(j in 1..n_templates) (
-  sum(i in 1..n_variations) (copies[i, j]) <= max_items
+% The total number of variations on each template must not exceed the maximum number of variations that can fit on a template
+constraint forall(j in 1..num_templates) (
+  sum(i in 1..num_variations) (bool2int(copies_per_template[i] > 0)) <= max_variations_per_template
 );
 
-% Minimize the number of distinct templates
-solve minimize n_templates;
+% Objective function
+% Minimize the number of distinct templates produced
+solve minimize num_templates;
 
-output ["Number of distinct templates: ", show(n_templates), "\n",
-        "Number of copies of each variation on each template: ", show(copies)];
+% Output the solution
+output ["Number of templates: ", show(num_templates), "\n"] ++
+["Copies per template: ", show(copies_per_template), "\n"];
 ```
 
-This model assumes that the demand for each variation and the maximum number of items that can be printed on a mother sheet are known and fixed. The decision variables are the number of distinct templates to produce and the number of copies of each variation to include on each template. The constraints ensure that the total number of copies of each variation meets the demand for that variation and that the total number of variations on a template does not exceed the maximum number of items that can be printed on a mother sheet. The objective is to minimize the number of distinct templates produced.
+Note: This model assumes that the number of copies of each variation on a template is the same for all variations on that template. This simplifies the problem by reducing the number of decision variables. However, it may not always produce the optimal solution. For example, if the demand for one variation is much higher than for others, it may be more efficient to produce more copies of that variation on each template.

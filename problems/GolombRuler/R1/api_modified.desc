@@ -1,54 +1,58 @@
-### Reasoning
+**Reasoning:**
 
-1. **Problem Analysis**: The problem involves placing `m` beacons on a straight path with the first beacon fixed at position 0. The key requirement is that all pairwise distances between beacons must be unique. This is equivalent to the Golomb ruler problem, where we seek a set of marks (beacon positions) such that all differences between pairs are distinct.
+1. **Problem Analysis:** The problem requires placing `m` beacons on a straight path starting at position 0, with all pairwise distances between beacons being unique. The goal is to minimize the position of the last beacon to reduce cost, which aligns with the Golomb ruler problem.
 
-2. **Decision Variables**: 
-   - Let `x` be an array of size `m` representing the positions of the beacons. `x[1]` is fixed at 0.
-   - For `i` from 2 to `m`, `x[i]` is a positive integer variable with `x[i] > x[i-1]` to ensure positions are strictly increasing.
+2. **Key Elements:**
+   - The first beacon is fixed at position 0.
+   - Positions must be strictly increasing to avoid duplicate distances (since distances are positive and distinct).
+   - All pairwise distances must be unique, meaning no two pairs of beacons share the same distance.
 
-3. **Domains**: 
-   - `x[1]` is fixed to 0.
-   - `x[i]` for `i > 1` are integer variables with lower bound 1 (implied by ordering) and no explicit upper bound initially, but the solver will handle minimization. For practicality, an upper bound could be set based on known Golomb ruler lengths, but it is omitted here for generality.
+3. **Mathematical Model:**
+   - **Decision Variables:** Let `pos[i]` be the position of the `i-th` beacon for `i = 1..m`, with `pos[1] = 0`.
+   - **Domains:** `pos[i]` are integers, with `pos[i]` for `i > 1` ranging from 1 to an upper bound (set to `m * m` for simplicity, as the optimal length for small `m` is bounded by this).
+   - **Constraints:**
+     - Strictly increasing positions: `pos[i] < pos[i+1]` for `i = 1..m-1`.
+     - All pairwise distances are distinct: the set `{ pos[j] - pos[i] | 1 ≤ i < j ≤ m }` must have no duplicates.
+   - **Objective:** Minimize `pos[m]`, the position of the last beacon.
 
-4. **Constraints**:
-   - **Ordering**: The positions must be strictly increasing: `x[i] < x[i+1]` for all `i` from 1 to `m-1`.
-   - **Unique Differences**: All pairwise differences `x[i] - x[j]` for `i > j` must be distinct. The number of such differences is `N = m*(m-1)/2`. An array `diffs` is created containing all these differences, and the `alldifferent` constraint is applied to it.
+4. **MiniZinc Implementation:**
+   - Use a parameter `m` for the number of beacons.
+   - Compute the number of pairs `n_pairs = m * (m-1) div 2`.
+   - Define an array `pos` of integer variables with `pos[1] = 0` and domains up to `m * m`.
+   - Enforce strictly increasing positions with inequality constraints.
+   - Compute all pairwise distances into an array `dists` and apply `all_different` constraint.
+   - Minimize `pos[m]`.
 
-5. **Objective Function**: The goal is to minimize the total path length, which is the position of the last beacon `x[m]`. This is an optimization problem, so we use `minimize x[m]`.
+5. **Optimization Notes:**
+   - The upper bound `m * m` is chosen heuristically for small `m`; it can be adjusted if needed for larger instances.
+   - The model uses integer arithmetic and combinatorial constraints, which are suitable for small to moderate `m`.
 
-6. **Modeling Considerations**: 
-   - The model uses integer variables and leverages MiniZinc's `alldifferent` constraint for simplicity.
-   - The differences are generated using a comprehension over all pairs `(i,j)` with `i > j`.
-   - No symmetry-breaking constraints are added, as the fixed first position and strict ordering naturally reduce symmetry.
-
-### MiniZinc Model
-
+**MiniZinc Model:**
 ```minizinc
-% Golomb Ruler Model for Beacon Placement
-% Parameters: m - number of beacons
+% Parameter: number of beacons
 int: m;
 
-% Decision variables: positions of beacons, x[1] = 0, others positive integers
-array[1..m] of var int: x;
+% Derived parameter: number of pairwise distances
+int: n_pairs = (m * (m - 1)) div 2;
+
+% Decision variables: positions of beacons, with first at 0
+array[1..m] of var 0..m*m: pos;
 
 % Constraint: first beacon at position 0
-constraint x[1] = 0;
+constraint pos[1] = 0;
 
 % Constraint: positions are strictly increasing
-constraint forall(i in 1..m-1)(x[i] < x[i+1]);
+constraint forall(i in 1..m-1) (pos[i] < pos[i+1]);
 
-% Number of pairwise differences
-int: N = m * (m-1) div 2;
+% Compute all pairwise distances
+array[1..n_pairs] of var int: dists = [pos[j] - pos[i] | i in 1..m, j in i+1..m];
 
-% Array of all pairwise differences for i > j
-array[1..N] of var int: diffs = [ x[i] - x[j] | i in 2..m, j in 1..i-1 ];
-
-% Constraint: all pairwise differences must be unique
-constraint alldifferent(diffs);
+% Constraint: all pairwise distances must be unique
+constraint all_different(dists);
 
 % Objective: minimize the position of the last beacon
-solve minimize x[m];
+solve minimize pos[m];
 
-% Output: display the positions
-output ["Beacon positions: ", show(x), "\n"];
+% Output: show the positions and distances (optional)
+output ["Positions: ", show(pos), "\nDistances: ", show(dists)];
 ```

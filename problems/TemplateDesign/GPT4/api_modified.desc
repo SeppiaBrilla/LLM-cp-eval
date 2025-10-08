@@ -1,52 +1,49 @@
 Reasoning:
 
 1. Decision Variables:
-   - The number of unique frames (let's denote it as `num_frames`).
-   - The number of each variation on each frame (let's denote it as `num_variations`).
+   - The number of unique frames necessary.
+   - The number of each variation to be arranged on each frame.
 
 2. Domains:
-   - `num_frames` is a positive integer.
-   - `num_variations` is a 2D array of positive integers, where the first dimension corresponds to the frame number and the second dimension corresponds to the variation number.
+   - The number of unique frames necessary: This is a positive integer.
+   - The number of each variation to be arranged on each frame: This is a positive integer.
 
 3. Constraints:
    - The total number of each variation on all frames must be equal to the required quantity of that variation.
-   - The total number of variations on each frame must not exceed the maximum number of panels that can be cut from a master sheet.
+   - The total number of variations on a frame must not exceed the maximum number of panels that can be cut from a master sheet.
 
-4. This is an optimization problem. The objective is to minimize the number of unique frames (`num_frames`).
+4. This is an optimization problem. The objective is to minimize the number of unique frames necessary.
 
 5. Potential Simplifications or Modeling Choices:
-   - We can assume that the maximum number of panels that can be cut from a master sheet is a known constant.
-   - We can also assume that the required quantity of each variation is given as input.
+   - We can assume that the number of each variation to be arranged on each frame is a decision variable. However, it might be more efficient to treat it as a derived variable, calculated from the number of unique frames necessary and the required quantity of each variation.
 
 MiniZinc model:
 
 ```minizinc
-% Paper Manufacturing Problem
+% Define the parameters
+int: num_variations; % The number of variations
+array[1..num_variations] of int: required_quantities; % The required quantity of each variation
+int: max_panels; % The maximum number of panels that can be cut from a master sheet
 
-% Parameters
-int: num_variations; % Number of variations
-array[1..num_variations] of int: required_quantities; % Required quantity of each variation
-int: max_panels; % Maximum number of panels that can be cut from a master sheet
+% Define the decision variables
+var 1..num_variations: num_frames; % The number of unique frames necessary
+array[1..num_variations, 1..num_frames] of var 0..max_panels: num_each_variation; % The number of each variation to be arranged on each frame
 
-% Decision Variables
-var 1..num_variations: num_frames; % Number of unique frames
-array[1..num_frames, 1..num_variations] of var 0..max_panels: panels; % Number of each variation on each frame
-
-% Constraints
-constraint forall(i in 1..num_variations) (
-  sum(j in 1..num_frames) (panels[j, i]) = required_quantities[i]
+% Define the constraints
+constraint forall(i in 1..num_variations)(
+  sum(j in 1..num_frames)(num_each_variation[i, j]) = required_quantities[i]
+);
+constraint forall(j in 1..num_frames)(
+  sum(i in 1..num_variations)(num_each_variation[i, j]) <= max_panels
 );
 
-constraint forall(i in 1..num_frames) (
-  sum(j in 1..num_variations) (panels[i, j]) <= max_panels
-);
-
-% Objective
+% Define the objective
 solve minimize num_frames;
 
-% Output
-output ["Number of unique frames: ", show(num_frames), "\n"] ++
-["Number of each variation on each frame: ", show(panels), "\n"];
+% Output the solution
+output ["Number of unique frames necessary: ", show(num_frames), "\n"];
+output ["Number of each variation to be arranged on each frame:\n"];
+output [show(num_each_variation[i, j]) | i in 1..num_variations, j in 1..num_frames];
 ```
 
-Note: This model assumes that the number of unique frames is less than or equal to the number of variations. If this is not the case, the domain of `num_frames` should be adjusted accordingly.
+This model assumes that the number of each variation to be arranged on each frame is a decision variable. However, it might be more efficient to treat it as a derived variable, calculated from the number of unique frames necessary and the required quantity of each variation. This would reduce the number of decision variables and potentially make the model easier to solve.

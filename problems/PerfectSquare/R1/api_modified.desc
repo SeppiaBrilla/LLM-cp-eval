@@ -1,59 +1,69 @@
-**Reasoning:**
+### Reasoning
 
-1. **Problem Analysis:** The problem involves tiling a square park of side length \( S \) with smaller squares of distinct integer side lengths. The squares must be aligned with the park's boundaries, not overlap, and cover as much area as possible to minimize unused space. The anti-rectangle constraint (no group of zones larger than one forming a rectangular block) is automatically satisfied if all squares have distinct sizes, as the union of any two or more distinct squares cannot form a rectangle due to size differences.
+1. **Problem Analysis**: The problem involves tiling a square park with smaller square zones of distinct integer side lengths. The zones must be axis-aligned, non-overlapping, and cover the park as completely as possible to minimize unused area. Additionally, no group of two or more zones should form a larger rectangular block when arranged together.
 
-2. **Key Elements:**
-   - \( S \) is the side length of the park, assumed to be a given parameter for the model.
-   - The squares have sizes from 1 to \( S \), but only a subset is used, with distinct sizes.
-   - For each possible size \( a \) from 1 to \( S \), a boolean variable `used[a]` indicates whether a square of size \( a \) is placed.
-   - If `used[a]` is true, variables `x[a]` and `y[a]` represent the bottom-left corner of the square, with domains ensuring it fits within the park: \( x[a] \in [1, S-a+1] \), \( y[a] \in [1, S-a+1] \).
+2. **Key Elements**:
+   - The park is a square with side length \( S \), which is an integer parameter.
+   - The number of zones \( N \) is given as a parameter. For this model, we assume \( N = 3 \) to simplify the "no rectangular block" constraint.
+   - Each zone \( i \) has a side length \( L_i \), which is a positive integer variable between 1 and \( S \). All \( L_i \) must be distinct.
+   - Each zone has a bottom-left corner coordinate \( (x_i, y_i) \), where \( x_i \) and \( y_i \) are integers from 0 to \( S - L_i \), ensuring the zone fits within the park.
 
-3. **Constraints:**
-   - **No Overlap:** For any two distinct sizes \( a \) and \( b \) where both squares are used, their squares must not overlap. This is enforced by ensuring that for each pair, one square is entirely to the left, right, above, or below the other.
-   - **Distinct Sizes:** Since `used[a]` is defined for each size and only one square per size is considered, sizes are inherently distinct.
+3. **Constraints**:
+   - **Non-overlapping**: For any two distinct zones \( i \) and \( j \), their squares must not overlap. This is enforced by ensuring that one zone is entirely to the left, right, below, or above the other.
+   - **Distinct Sizes**: All \( L_i \) must be different, using the `all_different` constraint.
+   - **No Rectangular Block**: For \( N = 3 \), the only subset with size greater than one is the set of all zones. We require that the sum of the areas of all zones is less than the area of their bounding box. This ensures that the zones do not form a larger rectangle when combined. The bounding box is defined by the minimum \( x \), maximum \( x + L_i \), minimum \( y \), and maximum \( y + L_i \) across all zones.
 
-4. **Objective:** Maximize the total area covered by the squares, which is the sum of \( a^2 \) for all \( a \) where `used[a]` is true. This minimizes the unused area (\( S^2 - \text{total covered area} \)).
+4. **Objective**: Maximize the total area covered by the zones, which is equivalent to minimizing the unused area \( S^2 - \sum L_i^2 \) since \( S \) is fixed.
 
-5. **Modeling Choices:**
-   - \( S \) is a parameter to make the model concrete for a given park size.
-   - The model does not require full coverage, allowing unused areas, but aims to minimize them via the objective.
-   - The anti-rectangle constraint is not explicitly encoded as it is satisfied by distinct sizes.
+5. **Simplifications**:
+   - Assuming \( N = 3 \) makes the "no rectangular block" constraint manageable, as only one subset needs to be checked.
+   - For \( N > 3 \), the model would need to iterate over all subsets of size at least 3, which is combinatorially expensive but feasible for small \( N \).
 
-**MiniZinc Model:**
+### MiniZinc Model
 
 ```minizinc
 % Parameters
 int: S; % Side length of the square park
+int: N = 3; % Number of zones (fixed to 3 for this model)
 
 % Decision variables
-array[1..S] of var bool: used; % used[a] is true if a square of size a is placed
-array[1..S] of var 1..S: x; % x[a] is the x-coordinate of the bottom-left corner for square of size a
-array[1..S] of var 1..S: y; % y[a] is the y-coordinate of the bottom-left corner for square of size a
+array[1..N] of var 1..S: L; % Side lengths of the zones
+array[1..N] of var 0..S: x; % x-coordinates of bottom-left corners
+array[1..N] of var 0..S: y; % y-coordinates of bottom-left corners
 
-% Constraints: Ensure that for each size a, if used, the square fits within the park
-constraint forall(a in 1..S) (
-    used[a] -> (x[a] <= S - a + 1 /\ y[a] <= S - a + 1)
+% Constraints
+
+% All zones must have distinct sizes
+constraint all_different(L);
+
+% Each zone must fit within the park
+constraint forall(i in 1..N) (
+    x[i] + L[i] <= S /\ y[i] + L[i] <= S
 );
 
-% Constraints: No overlap between any two squares that are used
-constraint forall(a in 1..S, b in 1..S where a < b) (
-    (used[a] /\ used[b]) -> (
-        (x[a] + a <= x[b]) \/ (x[b] + b <= x[a]) \/ 
-        (y[a] + a <= y[b]) \/ (y[b] + b <= y[a])
-    )
+% Zones must not overlap
+constraint forall(i, j in 1..N where i < j) (
+    x[i] + L[i] <= x[j] \/ x[j] + L[j] <= x[i] \/ 
+    y[i] + L[i] <= y[j] \/ y[j] + L[j] <= y[i]
 );
 
-% Objective: Maximize the total area covered by the squares
-solve maximize sum(a in 1..S) (a * a * bool2int(used[a]));
+% No rectangular block constraint for N=3
+var int: min_x = min([x[i] | i in 1..N]);
+var int: max_x = max([x[i] + L[i] | i in 1..N]);
+var int: min_y = min([y[i] | i in 1..N]);
+var int: max_y = max([y[i] + L[i] | i in 1..N]);
+constraint sum(i in 1..N) (L[i] * L[i]) < (max_x - min_x) * (max_y - min_y);
 
-% Output: Display the placement of squares
+% Objective: Maximize total area covered to minimize unused area
+solve maximize sum(i in 1..N) (L[i] * L[i]);
+
+% Output (optional)
 output [
-    "S = ", show(S), "\n",
-    "Used squares: ", show(used), "\n",
-    "x positions: ", show(x), "\n",
-    "y positions: ", show(y), "\n",
-    "Total covered area: ", show(sum(a in 1..S) (a * a * bool2int(used[a]))), "\n"
+    "Zone side lengths: ", show(L), "\n",
+    "Positions (x,y): ", show(zip(x, y)), "\n",
+    "Total area covered: ", show(sum(i in 1..N) (L[i] * L[i])), "\n",
+    "Unused area: ", show(S*S - sum(i in 1..N) (L[i] * L[i]))
 ];
 ```
 
-This model takes \( S \) as a parameter and finds a packing of distinct squares that maximizes the covered area. The output includes which sizes are used and their positions. For a given \( S \), if no perfect tiling exists, it will find the best possible packing. The anti-rectangle constraint is inherently satisfied due to distinct sizes.
+This model assumes \( N = 3 \) for simplicity. For larger \( N \), the "no rectangular block" constraint would need to be applied to all subsets of size at least 3, which can be implemented by generating all such subsets and adding corresponding constraints, though this may become computationally intensive for large \( N \).

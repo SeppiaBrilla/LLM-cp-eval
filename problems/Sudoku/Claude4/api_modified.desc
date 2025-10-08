@@ -1,109 +1,87 @@
 **Reasoning:**
 
-1. **Decision Variables**: We need to represent what's placed on each cell of the 9x9 board. Each cell can either be empty or contain a queen with a specific garment type.
+1. **Decision Variables**: We need to represent what queen (if any) is placed at each cell of the 9×9 board. Since queens have different garments and we want to maximize the number of different garments, we need variables that can represent different garment types or no queen at all.
 
-2. **Garment Types**: We need to define the different garment types. Since the problem mentions maximizing garment variety, I'll assume we have multiple garment types (white hat, green hat, blue, etc.). Let's use integers where 0 = empty, and 1,2,3,... represent different garment types.
+2. **Domains**: Each cell can either be empty or contain a queen with a specific garment. Let's say we have garment types 1, 2, 3, ... up to some maximum number of garments, and 0 represents an empty cell.
 
-3. **Attacking Cliques**: Each queen belongs to exactly one attacking clique type:
-   - Row clique: queens attack others in the same row
-   - Column clique: queens attack others in the same column  
-   - Block clique: queens attack others in the same 3x3 block
-
-4. **Constraints**:
-   - No two queens with the same garment can attack each other within their attacking clique
+3. **Constraints**: 
    - Pre-filled positions must be respected
-   - Each queen must be assigned to exactly one attacking clique type
+   - No two queens with the same garment can attack each other within the same attacking clique (row, column, or 3×3 block)
+   - Queens with different garments can coexist in the same attacking clique without conflict
 
-5. **Objective**: Maximize the number of different garment types present on the board
+4. **Objective Function**: Maximize the number of different garment types present on the board.
 
-6. **Modeling Choices**:
-   - Use a 2D array for the board with garment types (0 for empty)
-   - Use another 2D array to specify which attacking clique each queen belongs to
-   - Need helper functions to determine which block a position belongs to
+5. **Modeling Choices**:
+   - Use a 2D array `board[1..9, 1..9]` where each cell contains 0 (empty) or a garment type (1, 2, 3, ...)
+   - For the 3×3 blocks, we need to map each cell (i,j) to its block number
+   - The maximum number of garments we could theoretically place is limited by the constraint structure
+   - We need to handle pre-filled positions as fixed constraints
+
+6. **Block Mapping**: Each cell (i,j) belongs to block `((i-1) div 3) * 3 + ((j-1) div 3) + 1` (using 1-based indexing).
 
 **MiniZinc model:**
 
 ```minizinc
-% Chess-inspired game with queens, garments, and attacking cliques
+% Chess-inspired game with garmented queens
+% Maximize number of different garments while avoiding attacks within cliques
+
 % Board size
 int: n = 9;
 
-% Garment types (0 = empty, 1+ = different garment types)
-int: max_garments = 10; % Adjust based on how many garment types you want
-set of int: GARMENTS = 0..max_garments;
+% Maximum number of possible garment types (upper bound)
+int: max_garments = 9;
 
-% Attacking clique types
-int: ROW_CLIQUE = 1;
-int: COL_CLIQUE = 2;
-int: BLOCK_CLIQUE = 3;
-set of int: CLIQUE_TYPES = 1..3;
+% Decision variables: board[i,j] = 0 (empty) or garment type (1..max_garments)
+array[1..n, 1..n] of var 0..max_garments: board;
 
-% Decision variables
-array[0..n-1, 0..n-1] of var GARMENTS: board;
-array[0..n-1, 0..n-1] of var 0..3: clique_type; % 0 if empty, 1-3 for clique types
+% Pre-filled positions (example: board[4,7] = 1 for blue queen at position (3,6) in 0-based)
+% Adjust these constraints based on your specific pre-filled positions
+constraint board[4,7] = 1; % Example: blue queen at (3,6) - adjust as needed
 
-% Helper function to determine which 3x3 block a position belongs to
-function int: get_block(int: row, int: col) = 
-  (row div 3) * 3 + (col div 3);
+% Function to determine which 3x3 block a cell belongs to
+function int: get_block(int: i, int: j) = 
+    ((i-1) div 3) * 3 + ((j-1) div 3) + 1;
 
-% Constraint: clique_type is 0 iff the cell is empty
-constraint forall(i in 0..n-1, j in 0..n-1) (
-  (board[i,j] = 0) <-> (clique_type[i,j] = 0)
+% Constraint: No two queens with same garment can attack each other in same row
+constraint forall(i in 1..n, j1, j2 in 1..n where j1 < j2)(
+    if board[i,j1] > 0 /\ board[i,j2] > 0 then
+        board[i,j1] != board[i,j2]
+    else true endif
 );
 
-% Constraint: No attacks within the same garment and clique combination
-% Row clique attacks
-constraint forall(i in 0..n-1, j1, j2 in 0..n-1 where j1 < j2) (
-  (clique_type[i,j1] = ROW_CLIQUE /\ clique_type[i,j2] = ROW_CLIQUE /\ 
-   board[i,j1] > 0 /\ board[i,j2] > 0) ->
-  (board[i,j1] != board[i,j2])
+% Constraint: No two queens with same garment can attack each other in same column  
+constraint forall(j in 1..n, i1, i2 in 1..n where i1 < i2)(
+    if board[i1,j] > 0 /\ board[i2,j] > 0 then
+        board[i1,j] != board[i2,j]
+    else true endif
 );
 
-% Column clique attacks  
-constraint forall(j in 0..n-1, i1, i2 in 0..n-1 where i1 < i2) (
-  (clique_type[i1,j] = COL_CLIQUE /\ clique_type[i2,j] = COL_CLIQUE /\ 
-   board[i1,j] > 0 /\ board[i2,j] > 0) ->
-  (board[i1,j] != board[i2,j])
+% Constraint: No two queens with same garment can attack each other in same 3x3 block
+constraint forall(i1, j1, i2, j2 in 1..n where (i1,j1) != (i2,j2))(
+    if get_block(i1,j1) = get_block(i2,j2) /\ 
+       board[i1,j1] > 0 /\ board[i2,j2] > 0 then
+        board[i1,j1] != board[i2,j2]
+    else true endif
 );
 
-% Block clique attacks
-constraint forall(i1, j1, i2, j2 in 0..n-1 where (i1,j1) != (i2,j2)) (
-  (clique_type[i1,j1] = BLOCK_CLIQUE /\ clique_type[i2,j2] = BLOCK_CLIQUE /\ 
-   get_block(i1,j1) = get_block(i2,j2) /\
-   board[i1,j1] > 0 /\ board[i2,j2] > 0) ->
-  (board[i1,j1] != board[i2,j2])
+% Objective: Maximize number of different garment types on the board
+var int: num_garments = sum(g in 1..max_garments)(
+    if exists(i,j in 1..n)(board[i,j] = g) then 1 else 0 endif
 );
 
-% Pre-filled constraints (example - modify as needed)
-% constraint board[3,6] = 3; % blue queen (assuming blue = garment type 3)
-% constraint clique_type[3,6] = ROW_CLIQUE; % specify its clique type
-% Add more pre-filled constraints as needed
-
-% Objective: maximize number of different garment types on board
-var int: num_garment_types = sum(g in 1..max_garments) (
-  bool2int(exists(i in 0..n-1, j in 0..n-1) (board[i,j] = g))
-);
-
-solve maximize num_garment_types;
+solve maximize num_garments;
 
 % Output
 output [
-  "Board:\n"
+    "Board configuration:\n"
 ] ++
 [
-  if j = 0 then "\n" else " " endif ++
-  show(board[i,j])
-  | i in 0..n-1, j in 0..n-1
+    if j = 1 then "" else "" endif ++
+    show(board[i,j]) ++
+    if j = n then "\n" else " " endif
+    | i in 1..n, j in 1..n
 ] ++
 [
-  "\n\nClique types:\n"
-] ++
-[
-  if j = 0 then "\n" else " " endif ++
-  show(clique_type[i,j])
-  | i in 0..n-1, j in 0..n-1
-] ++
-[
-  "\n\nNumber of garment types: " ++ show(num_garment_types) ++ "\n"
+    "\nNumber of different garments: " ++ show(num_garments) ++ "\n"
 ];
 ```

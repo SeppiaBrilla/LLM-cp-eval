@@ -1,97 +1,108 @@
 **Reasoning:**
 
-1. **Decision Variables:**
-   - We need to decide which design variations to include on each template
-   - We need to decide how many copies of each variation to place on each template
-   - We need to decide how many templates to create (this could be implicit based on usage)
+1. **Decision Variables**: We need to decide:
+   - How many templates to create
+   - Which product variations to include on each template
+   - How many copies of each variation to place on each template
+   - How many times to print each template
 
-2. **Key Parameters:**
-   - Number of design variations available
-   - Demand (required quantity) for each variation
-   - Maximum capacity of items that can fit on one mother sheet/template
-   - Cost considerations (template creation cost vs. printing efficiency)
+2. **Key Parameters**:
+   - Number of product variations needed
+   - Quantity required for each variation
+   - Capacity of each mother sheet (maximum items that can fit)
+   - We want to minimize waste and potentially minimize number of templates
 
-3. **Constraints:**
-   - Each template has a maximum capacity (total items per sheet)
-   - We must meet the demand for each variation across all templates
-   - Each variation can appear on multiple templates with different quantities
-   - Non-negativity constraints on quantities
+3. **Constraints**:
+   - Each template cannot exceed the mother sheet capacity
+   - We must produce at least the required quantity of each variation
+   - Each variation can appear on multiple templates
+   - Number of copies of each variation on a template must be non-negative
 
-4. **Objective:**
-   - This appears to be an optimization problem where we want to minimize either:
-     - Total number of templates needed, or
-     - Total cost (balancing template creation costs with printing efficiency)
-   - For this model, I'll focus on minimizing the number of templates while meeting demand
+4. **Objective**: This appears to be a bin packing/cutting stock problem where we want to minimize waste (unused capacity) or minimize the number of templates needed.
 
-5. **Modeling Approach:**
+5. **Modeling Approach**: 
    - Use binary variables to indicate if a template is used
-   - Use integer variables for quantities of each variation on each template
-   - The maximum number of templates needed is bounded by the total demand divided by sheet capacity
+   - Use integer variables for how many copies of each variation appear on each template
+   - Use integer variables for how many times each template is printed
+   - The total production of each variation across all templates must meet demand
 
 **MiniZinc Model:**
 
 ```minizinc
-% Template Design Optimization for Color Printing
-% Minimize number of templates while meeting demand for all variations
+% Template Design Problem for Color Printing
+% Minimize number of templates while meeting production requirements
 
 % Parameters
-int: n_variations;  % Number of design variations
+int: n_variations;  % Number of product variations
+int: max_templates; % Upper bound on number of templates (can be set to n_variations)
 int: sheet_capacity; % Maximum items that can fit on one mother sheet
+
 array[1..n_variations] of int: demand; % Required quantity for each variation
 
-% Upper bound on number of templates needed
-int: max_templates = sum(demand) div sheet_capacity + 1;
-
 % Decision Variables
-% Binary variable: is template t used?
-array[1..max_templates] of var 0..1: template_used;
-
-% Integer variable: quantity of variation v on template t
-array[1..max_templates, 1..n_variations] of var 0..sheet_capacity: quantity;
+array[1..max_templates] of var bool: template_used; % Whether template t is used
+array[1..max_templates, 1..n_variations] of var 0..sheet_capacity: copies_on_template; % Copies of variation v on template t
+array[1..max_templates] of var 0..max(demand): print_runs; % How many times template t is printed
 
 % Constraints
 
-% Each template's total capacity cannot be exceeded
+% Template capacity constraint
 constraint forall(t in 1..max_templates) (
-    sum(v in 1..n_variations)(quantity[t,v]) <= sheet_capacity * template_used[t]
+    sum(v in 1..n_variations) (copies_on_template[t,v]) <= sheet_capacity
 );
 
-% Demand for each variation must be met across all templates
+% If template is not used, it has no copies and no print runs
+constraint forall(t in 1..max_templates) (
+    template_used[t] = false -> 
+    (sum(v in 1..n_variations) (copies_on_template[t,v]) = 0 /\ print_runs[t] = 0)
+);
+
+% If template is used, it must have at least one copy of some variation
+constraint forall(t in 1..max_templates) (
+    template_used[t] = true -> 
+    sum(v in 1..n_variations) (copies_on_template[t,v]) >= 1
+);
+
+% Demand satisfaction constraint
 constraint forall(v in 1..n_variations) (
-    sum(t in 1..max_templates)(quantity[t,v]) >= demand[v]
+    sum(t in 1..max_templates) (copies_on_template[t,v] * print_runs[t]) >= demand[v]
 );
 
-% If a template is not used, all quantities on it must be zero
-constraint forall(t in 1..max_templates, v in 1..n_variations) (
-    quantity[t,v] <= sheet_capacity * template_used[t]
-);
-
-% Symmetry breaking: use templates in order
+% Symmetry breaking: templates are used in order
 constraint forall(t in 1..max_templates-1) (
-    template_used[t] >= template_used[t+1]
+    template_used[t+1] -> template_used[t]
 );
 
-% Objective: minimize number of templates
-solve minimize sum(t in 1..max_templates)(template_used[t]);
+% Objective: Minimize number of templates used
+var int: num_templates = sum(t in 1..max_templates) (template_used[t]);
+solve minimize num_templates;
 
 % Output
 output [
-    "Number of templates used: " ++ show(sum(t in 1..max_templates)(template_used[t])) ++ "\n"
+    "Number of templates used: " ++ show(num_templates) ++ "\n"
 ] ++
 [
-    if template_used[t] == 1 then
-        "Template " ++ show(t) ++ ": " ++ 
-        show([quantity[t,v] | v in 1..n_variations]) ++ 
-        " (total: " ++ show(sum(v in 1..n_variations)(quantity[t,v])) ++ ")\n"
+    if template_used[t] then
+        "Template " ++ show(t) ++ " (printed " ++ show(print_runs[t]) ++ " times): " ++
+        concat([if copies_on_template[t,v] > 0 then 
+                   "Variation " ++ show(v) ++ ":" ++ show(copies_on_template[t,v]) ++ " copies " 
+                else "" endif | v in 1..n_variations]) ++ "\n"
     else ""
-    endif
-    | t in 1..max_templates
+    endif | t in 1..max_templates
+] ++
+[
+    "\nProduction summary:\n"
+] ++
+[
+    "Variation " ++ show(v) ++ ": produced " ++ 
+    show(sum(t in 1..max_templates) (copies_on_template[t,v] * print_runs[t])) ++ 
+    " (required " ++ show(demand[v]) ++ ")\n"
+    | v in 1..n_variations
 ];
 
-% Example data (uncomment and modify as needed)
-/*
-n_variations = 4;
-sheet_capacity = 100;
-demand = [150, 200, 75, 300];
-*/
+% Example data (uncomment to test)
+% n_variations = 4;
+% max_templates = 4;
+% sheet_capacity = 10;
+% demand = [15, 8, 12, 6];
 ```

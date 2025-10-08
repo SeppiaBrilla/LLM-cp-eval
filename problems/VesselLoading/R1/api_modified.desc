@@ -1,46 +1,56 @@
-**Reasoning:**
+### Reasoning
 
-1. **Problem Analysis**: The problem involves placing rectangular artworks in a rectangular gallery without overlap and while satisfying distance rules between certain categories. Each artwork has a fixed width and height, and must be placed aligned with the walls. The gallery has dimensions width \(W\) and height \(H\). Artworks belong to categories, and for some pairs of categories, there is a minimum distance requirement that must be maintained either horizontally or vertically.
+1. **Problem Analysis**: The problem involves placing rectangular artworks in a rectangular gallery without overlap and while satisfying certain distance constraints between categories. Each artwork has fixed dimensions and belongs to a category. Some category pairs require a minimum horizontal or vertical separation. The goal is to check if such an arrangement exists.
 
-2. **Decision Variables**: For each artwork \(i\), we need to assign:
-   - \(x_i\): the x-coordinate of the bottom-left corner.
-   - \(y_i\): the y-coordinate of the bottom-left corner.
-   Domains: \(x_i\) must be in \([0, W - w_i]\) and \(y_i\) in \([0, H - h_i]\) to ensure the artwork fits within the gallery.
+2. **Key Components**:
+   - **Gallery**: Defined by width \(W\) and height \(H\).
+   - **Artworks**: Each has width \(w_i\), height \(h_i\), and category \(c_i\).
+   - **Distance Rules**: For some category pairs, a minimum horizontal or vertical distance \(d\) must be maintained.
 
-3. **Constraints**:
-   - **No Overlap**: For any two distinct artworks \(i\) and \(j\), they must not overlap. This is enforced by ensuring that at least one of the following is true: \(i\) is to the left of \(j\), \(j\) is to the left of \(i\), \(i\) is below \(j\), or \(j\) is below \(i\).
-   - **Distance Rules**: For each distance rule between categories \(cat1\) and \(cat2\) with distance \(d\), for any two artworks \(i\) and \(j\) (where \(i \neq j\)) from these categories, either the horizontal distance is at least \(d\) or the vertical distance is at least \(d\). The horizontal distance is defined as the gap between the artworks in the x-direction, and similarly for vertical.
+3. **Decision Variables**:
+   - For each artwork \(i\), assign bottom-left coordinates \((x_i, y_i)\).
+   - Domains: \(x_i \in [0, W]\) and \(y_i \in [0, H]\), but constrained to ensure the artwork fits within the gallery.
 
-4. **Modeling Choices**:
-   - Categories are represented as integers for simplicity.
-   - Distance rules are provided as arrays specifying the pairs of categories and the required distance.
-   - The no-overlap constraint uses a disjunction of conditions for efficiency.
-   - The distance constraint uses a disjunction of horizontal or vertical separation conditions.
+4. **Constraints**:
+   - **Fit within Gallery**: Each artwork must fully reside inside the gallery: \(x_i + w_i \leq W\) and \(y_i + h_i \leq H\) for all \(i\).
+   - **No Overlap**: For any two distinct artworks \(i\) and \(j\), their rectangles must not overlap. This is enforced by ensuring that either \(i\) is left of \(j\), right of \(j\), below \(j\), or above \(j\).
+   - **Distance Constraints**: For each distance rule between categories \(cat1\) and \(cat2\), all pairs of artworks from these categories must satisfy the required horizontal or vertical separation. For horizontal distance \(d\), either \(i\) is left of \(j\) with gap at least \(d\) or vice versa. Similarly for vertical.
 
-5. **Objective**: This is a satisfaction problem; we need to check if a feasible arrangement exists. Thus, we use `solve satisfy`.
+5. **Modeling Choices**:
+   - Coordinates are integers for simplicity, assuming all measurements are integers.
+   - Distance rules are symmetric and applied to unordered pairs of artworks.
+   - No-overlap and distance constraints are applied separately; distance constraints imply no-overlap for the involved pairs but are kept for clarity.
 
-**MiniZinc Model:**
+6. **Output**: The model uses `solve satisfy;` to check feasibility. Positions can be output if needed, but the problem only requires a decision.
+
+### MiniZinc Model
 
 ```minizinc
-% Parameters for the gallery and artworks
-int: W; % Gallery width
-int: H; % Gallery height
-int: n; % Number of artworks
+% Gallery dimensions
+int: W; % Width of the gallery
+int: H; % Height of the gallery
+
+% Number of artworks
+int: n;
+
+% Artwork dimensions and categories
 array[1..n] of int: w; % Width of each artwork
 array[1..n] of int: h; % Height of each artwork
-array[1..n] of int: category; % Category of each artwork (e.g., integers from 1 to C)
+array[1..n] of int: c; % Category of each artwork
 
-% Parameters for distance rules
+% Distance rules
+enum DIRECTION = {HORIZONTAL, VERTICAL};
 int: m; % Number of distance rules
-array[1..m] of int: cat1; % First category for each rule
-array[1..m] of int: cat2; % Second category for each rule
-array[1..m] of int: d; % Required distance for each rule
+array[1..m] of int: rule_cat1; % First category in rule
+array[1..m] of int: rule_cat2; % Second category in rule
+array[1..m] of DIRECTION: rule_type; % Type of distance (HORIZONTAL or VERTICAL)
+array[1..m] of int: rule_d; % Minimum distance required
 
-% Decision variables: coordinates for each artwork
+% Decision variables: positions of artworks
 array[1..n] of var 0..W: x; % x-coordinate (bottom-left)
 array[1..n] of var 0..H: y; % y-coordinate (bottom-left)
 
-% Constraint: Artworks must fit within the gallery
+% Constraint: Each artwork must fit within the gallery
 constraint forall(i in 1..n) (
     x[i] + w[i] <= W /\ y[i] + h[i] <= H
 );
@@ -53,17 +63,27 @@ constraint forall(i, j in 1..n where i < j) (
     (y[j] + h[j] <= y[i])
 );
 
-% Constraint: Distance rules for category pairs
+% Constraint: Apply distance rules for relevant category pairs
 constraint forall(k in 1..m) (
-    forall(i, j in 1..n where i != j /\ category[i] = cat1[k] /\ category[j] = cat2[k]) (
-        % Either horizontal distance >= d or vertical distance >= d
-        (x[j] - x[i] >= w[i] + d[k]) \/ 
-        (x[i] - x[j] >= w[j] + d[k]) \/ 
-        (y[j] - y[i] >= h[i] + d[k]) \/ 
-        (y[i] - y[j] >= h[j] + d[k])
+    forall(i, j in 1..n where i < j /\ (
+        (c[i] = rule_cat1[k] /\ c[j] = rule_cat2[k]) \/ 
+        (c[i] = rule_cat2[k] /\ c[j] = rule_cat1[k])
+    )) (
+        if rule_type[k] == HORIZONTAL then
+            (x[i] + w[i] + rule_d[k] <= x[j]) \/ 
+            (x[j] + w[j] + rule_d[k] <= x[i])
+        else
+            (y[i] + h[i] + rule_d[k] <= y[j]) \/ 
+            (y[j] + h[j] + rule_d[k] <= y[i])
+        endif
     )
 );
 
-% Solve: Check if a feasible arrangement exists
+% Solve for satisfaction
 solve satisfy;
+
+% Output positions if a solution is found
+output [
+    "x = ", show(x), "; y = ", show(y)
+];
 ```

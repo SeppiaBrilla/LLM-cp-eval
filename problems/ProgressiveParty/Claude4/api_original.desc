@@ -3,27 +3,30 @@
 1. **Decision Variables:**
    - `is_host[i]`: Boolean variable indicating whether boat i is designated as a host
    - `visit[g,h,t]`: Boolean variable indicating whether guest boat g visits host boat h at time period t
+   - `meet[g1,g2]`: Boolean variable tracking whether guest crews g1 and g2 have met (to enforce they meet at most once)
 
-2. **Parameters:**
-   - Number of boats: 42
-   - Number of time periods: 6
-   - For each boat i: capacity[i] and crew_size[i] (given in the table)
-   - Boats 40, 41, 42 have capacity 0, so they cannot be hosts
+2. **Domains:**
+   - Boats: 1 to 42
+   - Time periods: 1 to 6
+   - `is_host[i]`: Boolean (0 or 1)
+   - `visit[g,h,t]`: Boolean (0 or 1)
+   - `meet[g1,g2]`: Boolean (0 or 1)
 
-3. **Constraints:**
-   - **Host designation**: A boat can only be visited if it's designated as a host
-   - **Capacity constraint**: At any time period, the total people on a host boat (host crew + visiting guest crews) cannot exceed its capacity
-   - **Guest boat scheduling**: Each guest boat must visit exactly one host in each time period
-   - **No revisiting**: A guest boat cannot visit the same host more than once across all time periods
-   - **Guest crews cannot meet twice**: If two guest boats visit the same host in one time period, they cannot visit the same host together in any other time period
-   - **Boats with zero capacity cannot be hosts**: Boats 40, 41, 42 must be guests
+3. **Key Constraints:**
+   - **Host/Guest separation**: A boat cannot be both host and guest
+   - **Capacity constraints**: Total people on each host boat at each time period ≤ capacity
+   - **Guest scheduling**: Each guest boat visits exactly one host per time period
+   - **No revisiting**: A guest boat cannot visit the same host more than once
+   - **Meeting constraint**: Guest crews can meet at most once (when visiting the same host at the same time)
+   - **Zero-capacity boats**: Boats 40, 41, 42 have capacity 0, so they cannot be hosts
 
 4. **Objective Function:**
-   - Minimize the total number of host boats (sum of is_host variables)
+   - Minimize the total number of host boats: `minimize sum(i in BOATS)(is_host[i])`
 
 5. **Modeling Choices:**
-   - Use 1-based indexing to match the boat numbering in the problem
-   - The "guest crews cannot meet more than once" constraint is the most complex - we need to ensure that for any pair of guest boats, they don't visit the same host in more than one time period
+   - Use symmetry breaking by ordering boats when possible
+   - Handle the meeting constraint by tracking all pairs of guest boats
+   - Ensure boats with zero capacity cannot be hosts
 
 **MiniZinc model:**
 
@@ -31,73 +34,84 @@
 % Yacht Club Party Timetabling Problem
 % Minimize the number of host boats while satisfying all constraints
 
-% Parameters
+% Data
 int: n_boats = 42;
 int: n_periods = 6;
+set of int: BOATS = 1..n_boats;
+set of int: PERIODS = 1..n_periods;
 
 % Boat data
-array[1..n_boats] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0];
-array[1..n_boats] of int: crew_size = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
+array[BOATS] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0];
+array[BOATS] of int: crew_size = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
 
 % Decision variables
-array[1..n_boats] of var bool: is_host;  % Whether boat i is a host
-array[1..n_boats, 1..n_boats, 1..n_periods] of var bool: visit;  % guest g visits host h at time t
+array[BOATS] of var bool: is_host;  % Whether boat i is a host
+array[BOATS, BOATS, PERIODS] of var bool: visit;  % Whether guest g visits host h at time t
+array[BOATS, BOATS] of var bool: meet;  % Whether guest crews g1 and g2 have met
 
-% Boats with zero capacity cannot be hosts
-constraint forall(i in 1..n_boats where capacity[i] = 0) (
+% Objective: minimize number of host boats
+var int: num_hosts = sum(i in BOATS)(is_host[i]);
+solve minimize num_hosts;
+
+% Constraints
+
+% 1. Boats with zero capacity cannot be hosts
+constraint forall(i in BOATS where capacity[i] = 0)(
     is_host[i] = false
 );
 
-% A boat cannot visit itself
-constraint forall(i in 1..n_boats, t in 1..n_periods) (
-    visit[i,i,t] = false
+% 2. A boat cannot visit itself
+constraint forall(g in BOATS, t in PERIODS)(
+    visit[g, g, t] = false
 );
 
-% Can only visit designated hosts
-constraint forall(g in 1..n_boats, h in 1..n_boats, t in 1..n_periods) (
-    visit[g,h,t] -> is_host[h]
+% 3. A guest boat can only visit hosts
+constraint forall(g, h in BOATS, t in PERIODS)(
+    visit[g, h, t] -> is_host[h]
 );
 
-% Each guest boat visits exactly one host per time period
-constraint forall(g in 1..n_boats, t in 1..n_periods where not is_host[g]) (
-    sum(h in 1..n_boats) (visit[g,h,t]) = 1
+% 4. A host boat cannot visit other boats (hosts stay on their boats)
+constraint forall(g, h in BOATS, t in PERIODS)(
+    visit[g, h, t] -> not is_host[g]
 );
 
-% Host boats don't visit anyone (they stay on their boat)
-constraint forall(g in 1..n_boats, h in 1..n_boats, t in 1..n_periods) (
-    is_host[g] -> visit[g,h,t] = false
+% 5. Each guest boat visits exactly one host per time period
+constraint forall(g in BOATS where not is_host[g])(
+    forall(t in PERIODS)(
+        sum(h in BOATS)(visit[g, h, t]) = 1
+    )
 );
 
-% Capacity constraint: total people on host boat cannot exceed capacity
-constraint forall(h in 1..n_boats, t in 1..n_periods where is_host[h]) (
-    crew_size[h] + sum(g in 1..n_boats) (visit[g,h,t] * crew_size[g]) <= capacity[h]
+% 6. Host boats don't visit anyone (they stay put)
+constraint forall(g in BOATS where is_host[g])(
+    forall(h in BOATS, t in PERIODS)(
+        visit[g, h, t] = false
+    )
 );
 
-% No revisiting: a guest cannot visit the same host more than once
-constraint forall(g in 1..n_boats, h in 1..n_boats) (
-    sum(t in 1..n_periods) (visit[g,h,t]) <= 1
+% 7. Capacity constraints: total people on each host boat ≤ capacity
+constraint forall(h in BOATS, t in PERIODS where is_host[h])(
+    crew_size[h] + sum(g in BOATS)(visit[g, h, t] * crew_size[g]) <= capacity[h]
 );
 
-% Guest crews cannot meet more than once
-constraint forall(g1, g2 in 1..n_boats where g1 < g2) (
-    sum(h in 1..n_boats, t in 1..n_periods) (visit[g1,h,t] * visit[g2,h,t]) <= 1
+% 8. A guest boat cannot revisit the same host
+constraint forall(g, h in BOATS)(
+    sum(t in PERIODS)(visit[g, h, t]) <= 1
 );
 
-% Objective: minimize number of host boats
-var int: num_hosts = sum(i in 1..n_boats) (is_host[i]);
-solve minimize num_hosts;
+% 9. Guest crews can meet at most once
+constraint forall(g1, g2 in BOATS where g1 < g2)(
+    meet[g1, g2] = (sum(h in BOATS, t in PERIODS)(visit[g1, h, t] * visit[g2, h, t]) >= 1)
+);
+
+% 10. Symmetry breaking: if two boats have same capacity and crew size, order them
+constraint forall(i, j in BOATS where i < j /\ capacity[i] = capacity[j] /\ crew_size[i] = crew_size[j])(
+    is_host[i] >= is_host[j]
+);
 
 % Output
 output [
     "Number of host boats: " ++ show(num_hosts) ++ "\n" ++
-    "Host boats: " ++ show([i | i in 1..n_boats where fix(is_host[i])]) ++ "\n"
-] ++
-[
-    "Time period " ++ show(t) ++ ":\n" ++
-    concat([
-        "  Boat " ++ show(g) ++ " -> Boat " ++ show(h) ++ "\n"
-        | g in 1..n_boats, h in 1..n_boats where fix(visit[g,h,t])
-    ])
-    | t in 1..n_periods
+    "Host boats: " ++ show([i | i in BOATS where fix(is_host[i])]) ++ "\n"
 ];
 ```

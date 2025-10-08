@@ -1,118 +1,91 @@
 **Reasoning:**
 
-1. **Decision Variables:**
-   - For each container i, we need variables for its position: `x[i]` and `y[i]` representing the coordinates of one corner (e.g., bottom-left)
-   - We also need to decide the orientation of each container: `rotated[i]` (boolean) indicating if container i is rotated 90 degrees
+1. **Decision Variables**: We need to determine the position of each container on the deck. For each container, we need its bottom-left corner coordinates (x, y) since containers are rectangles positioned parallel to deck sides.
 
-2. **Domains:**
-   - Position variables: `x[i]` in `0..deck_width`, `y[i]` in `0..deck_height`
-   - The actual bounds depend on container dimensions and rotation
-   - Rotation variables: `rotated[i]` is boolean
+2. **Domains**: 
+   - x-coordinates: from 0 to (deck_width - container_width) to ensure container fits within deck
+   - y-coordinates: from 0 to (deck_length - container_length) to ensure container fits within deck
 
-3. **Constraints:**
-   - **Boundary constraints:** Each container must fit entirely within the deck boundaries
-   - **Non-overlapping constraints:** No two containers can overlap
-   - **Separation constraints:** Containers of certain classes must maintain minimum distances along x-axis (across deck) and y-axis (along deck)
+3. **Constraints**:
+   - **Non-overlapping**: No two containers can occupy the same space on the deck
+   - **Boundary constraints**: All containers must fit completely within the deck boundaries
+   - **Separation constraints**: Containers of certain classes must maintain minimum distances from each other, either along deck (x-direction) or across deck (y-direction)
 
-4. **Key modeling decisions:**
-   - Use bottom-left corner as reference point for each container
-   - Handle rotation by swapping width/height when `rotated[i]` is true
-   - For separation constraints, we need to consider the distance between container boundaries, not just their reference points
+4. **Problem Type**: This is a constraint satisfaction problem (CSP) - we want to determine if a feasible placement exists, not optimize any objective.
 
-5. **Problem type:** This is a satisfaction problem - we want to determine if a feasible placement exists.
+5. **Modeling Choices**:
+   - Use 2D coordinates for bottom-left corner of each container
+   - Model non-overlapping using disjunctive constraints (either separated in x OR y direction)
+   - Handle class-based separation constraints by checking distances between containers of specified classes
+   - Use global constraint `diffn` for efficient non-overlapping if available, or explicit disjunctive constraints
 
-6. **Potential complexities:**
-   - Need to handle rotated dimensions properly
-   - Separation constraints require careful distance calculations between container boundaries
-   - Non-overlapping constraints for rectangles can be complex but MiniZinc has built-in support
-
-**MiniZinc model:**
+**MiniZinc Model:**
 
 ```minizinc
-% Supply vessel container loading problem
-% Pack containers on deck subject to separation constraints
+% Supply Vessel Container Loading Problem
+% Pack containers on deck without overlap and respecting separation constraints
 
 % Parameters
 int: n_containers;                    % Number of containers
 int: deck_width;                      % Deck width
-int: deck_height;                     % Deck height
+int: deck_length;                     % Deck length
 
-array[1..n_containers] of int: width;     % Container widths
-array[1..n_containers] of int: height;    % Container heights
-array[1..n_containers] of int: class;     % Container classes
+array[1..n_containers] of int: width;    % Container widths
+array[1..n_containers] of int: length;   % Container lengths  
+array[1..n_containers] of int: class;    % Container classes
 
-int: n_classes;                       % Number of container classes
-array[1..n_classes, 1..n_classes] of int: min_dist_x;  % Min separation across deck
-array[1..n_classes, 1..n_classes] of int: min_dist_y;  % Min separation along deck
+% Separation constraints data
+int: n_separations;                   % Number of separation rules
+array[1..n_separations] of int: class1;  % First class in separation rule
+array[1..n_separations] of int: class2;  % Second class in separation rule
+array[1..n_separations] of int: min_x_sep;  % Minimum separation along deck (x-direction)
+array[1..n_separations] of int: min_y_sep;  % Minimum separation across deck (y-direction)
 
-% Decision variables
-array[1..n_containers] of var 0..deck_width: x;      % X coordinates (bottom-left)
-array[1..n_containers] of var 0..deck_height: y;     % Y coordinates (bottom-left)
-array[1..n_containers] of var bool: rotated;         % Rotation (90 degrees)
+% Decision variables - bottom-left corner coordinates
+array[1..n_containers] of var 0..deck_width: x;
+array[1..n_containers] of var 0..deck_length: y;
 
-% Actual dimensions after rotation
-array[1..n_containers] of var int: actual_width;
-array[1..n_containers] of var int: actual_height;
+% Constraints
 
+% 1. Containers must fit within deck boundaries
 constraint forall(i in 1..n_containers) (
-  actual_width[i] = if rotated[i] then height[i] else width[i] endif
-  /\ actual_height[i] = if rotated[i] then width[i] else height[i] endif
+    x[i] + width[i] <= deck_width /\
+    y[i] + length[i] <= deck_length
 );
 
-% Boundary constraints - containers must fit within deck
-constraint forall(i in 1..n_containers) (
-  x[i] + actual_width[i] <= deck_width
-  /\ y[i] + actual_height[i] <= deck_height
-);
-
-% Non-overlapping constraints
+% 2. Non-overlapping constraints
 constraint forall(i, j in 1..n_containers where i < j) (
-  x[i] + actual_width[i] <= x[j] \/
-  x[j] + actual_width[j] <= x[i] \/
-  y[i] + actual_height[i] <= y[j] \/
-  y[j] + actual_height[j] <= y[i]
+    x[i] + width[i] <= x[j] \/     % i is left of j
+    x[j] + width[j] <= x[i] \/     % j is left of i  
+    y[i] + length[i] <= y[j] \/    % i is below j
+    y[j] + length[j] <= y[i]       % j is below i
 );
 
-% Separation constraints between different classes
-constraint forall(i, j in 1..n_containers where i != j) (
-  let {
-    int: class_i = class[i],
-    int: class_j = class[j],
-    var int: dist_x = min(abs(x[i] + actual_width[i] - x[j]), 
-                         abs(x[j] + actual_width[j] - x[i])),
-    var int: dist_y = min(abs(y[i] + actual_height[i] - y[j]), 
-                         abs(y[j] + actual_height[j] - y[i]))
-  } in (
-    % Only apply separation if containers don't overlap
-    (x[i] + actual_width[i] <= x[j] \/ x[j] + actual_width[j] <= x[i] \/
-     y[i] + actual_height[i] <= y[j] \/ y[j] + actual_height[j] <= y[i]) ->
-    (dist_x >= min_dist_x[class_i, class_j] /\ 
-     dist_y >= min_dist_y[class_i, class_j])
-  )
+% 3. Class-based separation constraints
+constraint forall(s in 1..n_separations, i, j in 1..n_containers where i != j) (
+    (class[i] = class1[s] /\ class[j] = class2[s]) \/
+    (class[i] = class2[s] /\ class[j] = class1[s]) ->
+    (
+        % Either separated by minimum distance in x-direction
+        (x[i] + width[i] + min_x_sep[s] <= x[j] \/ 
+         x[j] + width[j] + min_x_sep[s] <= x[i]) \/
+        % Or separated by minimum distance in y-direction  
+        (y[i] + length[i] + min_y_sep[s] <= y[j] \/
+         y[j] + length[j] + min_y_sep[s] <= y[i])
+    )
 );
 
+% Solve as satisfaction problem
 solve satisfy;
 
 % Output
 output [
-  "Container " ++ show(i) ++ ": position (" ++ show(x[i]) ++ "," ++ show(y[i]) ++ 
-  "), size " ++ show(actual_width[i]) ++ "x" ++ show(actual_height[i]) ++ 
-  if rotated[i] then " (rotated)" else "" endif ++ "\n"
-  | i in 1..n_containers
+    "Container positions:\n"
+] ++
+[
+    "Container " ++ show(i) ++ " (class " ++ show(class[i]) ++ 
+    "): x=" ++ show(x[i]) ++ ", y=" ++ show(y[i]) ++ 
+    ", width=" ++ show(width[i]) ++ ", length=" ++ show(length[i]) ++ "\n"
+    | i in 1..n_containers
 ];
-
-% Example data (uncomment and modify as needed):
-/*
-n_containers = 3;
-deck_width = 10;
-deck_height = 8;
-width = [3, 2, 4];
-height = [2, 3, 2];
-class = [1, 2, 1];
-n_classes = 2;
-min_dist_x = [| 0, 1 |
-              | 1, 0 |];
-min_dist_y = [| 0, 2 |
-              | 2, 0 |];
-*/
 ```

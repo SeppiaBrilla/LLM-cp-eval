@@ -1,151 +1,160 @@
 **Reasoning:**
 
-1. **Decision Variables**: We need a 2D grid where each cell represents whether a tile is filled (1) or blank (0). Let's call this `grid[i,j]` with domain {0,1}.
+1. **Decision Variables**: We need binary variables to represent whether each tile in the grid is filled (1) or blank (0). Let's call this a 2D array `grid[i,j]` where `i` is the row and `j` is the column.
 
-2. **Input Parameters**: 
+2. **Input Parameters**: We need to specify:
    - Grid dimensions (rows and columns)
-   - For each row: a sequence of required consecutive block lengths
-   - For each column: a sequence of required consecutive block lengths
+   - Row constraints: for each row, a sequence of consecutive block lengths
+   - Column constraints: for each column, a sequence of consecutive block lengths
 
-3. **Constraints**:
-   - Each row must contain the specified blocks in order, with at least one blank tile between consecutive blocks
-   - Each column must contain the specified blocks in order, with at least one blank tile between consecutive blocks
-   - The blocks must be consecutive (no gaps within a block)
-   - Blocks must be separated by at least one blank tile
+3. **Constraint Modeling**: For each row and column, we need to ensure that:
+   - The filled tiles form exactly the specified number of consecutive blocks
+   - Each block has exactly the required length
+   - Blocks are separated by at least one blank tile
+   - The blocks appear in the specified order
 
-4. **Modeling Approach**:
-   - Use regular expressions or automata to enforce the pattern constraints
-   - For each row/column, the pattern is: (any blanks)(block1)(at least one blank)(block2)...(any blanks)
-   - We can use MiniZinc's `regular` constraint with finite automata
+4. **Constraint Implementation Strategy**: 
+   - For each row/column constraint, we can use a regular expression or automaton approach
+   - Alternatively, we can model this by identifying the start positions of each block and ensuring proper spacing
+   - The regular expression approach is cleaner: for a constraint like (3,1,2), the pattern would be: `0* 1{3} 0+ 1{1} 0+ 1{2} 0*` (zero or more blanks, exactly 3 filled, one or more blanks, exactly 1 filled, one or more blanks, exactly 2 filled, zero or more blanks)
 
-5. **This is a satisfaction problem** - we want to find any valid arrangement that satisfies all row and column constraints.
+5. **Objective**: This appears to be a constraint satisfaction problem rather than an optimization problem, so we just need to find a feasible solution.
+
+6. **MiniZinc Implementation**: We'll use the `regular` constraint with appropriate automata to enforce the consecutive block patterns for each row and column.
 
 **MiniZinc model:**
 
 ```minizinc
-% Facade tile arrangement problem
+% Facade Design with Consecutive Stone Block Patterns
+
 % Parameters
 int: rows;
 int: cols;
 
-% Maximum number of blocks per row/column
-int: max_blocks = 10;
+% Row constraints: for each row, specify the lengths of consecutive blocks
+array[1..rows] of var set of int: row_blocks;
+% Column constraints: for each column, specify the lengths of consecutive blocks  
+array[1..cols] of var set of int: col_blocks;
 
-% Number of blocks required for each row and column
-array[1..rows] of int: row_num_blocks;
-array[1..cols] of int: col_num_blocks;
+% For simplicity, let's define specific constraints for a concrete example
+% This can be generalized by reading from data files
+int: n_rows = 5;
+int: n_cols = 5;
 
-% Block lengths for each row and column
-array[1..rows, 1..max_blocks] of int: row_blocks;
-array[1..cols, 1..max_blocks] of int: col_blocks;
+% Example: row 1 needs blocks of length (3,1), row 2 needs (2,2), etc.
+array[1..n_rows, 1..3] of int: row_constraints = 
+  [| 3, 1, 0  % row 1: blocks of length 3, then 1 (0 means no more blocks)
+   | 2, 2, 0  % row 2: blocks of length 2, then 2
+   | 1, 1, 1  % row 3: blocks of length 1, then 1, then 1
+   | 4, 0, 0  % row 4: one block of length 4
+   | 2, 1, 0  % row 5: blocks of length 2, then 1
+   |];
 
-% Decision variables: 1 = filled tile, 0 = blank tile
-array[1..rows, 1..cols] of var 0..1: grid;
+array[1..n_cols, 1..3] of int: col_constraints = 
+  [| 2, 1, 0  % col 1: blocks of length 2, then 1
+   | 1, 2, 0  % col 2: blocks of length 1, then 2  
+   | 3, 1, 0  % col 3: blocks of length 3, then 1
+   | 1, 1, 1  % col 4: blocks of length 1, then 1, then 1
+   | 2, 2, 0  % col 5: blocks of length 2, then 2
+   |];
 
-% Helper function to create automaton for a sequence of blocks
-function array[int] of int: create_pattern_automaton(array[int] of int: blocks, int: num_blocks) =
+% Decision variables: 1 if tile is filled, 0 if blank
+array[1..n_rows, 1..n_cols] of var 0..1: grid;
+
+% Helper function to create regular expression for a sequence of block lengths
+function var int: create_automaton_states(array[int] of int: blocks) = 
   let {
-    % States: 0=start, 1..sum(blocks)=within blocks, sum(blocks)+1=between blocks, sum(blocks)+2=end
-    int: total_block_cells = sum(i in 1..num_blocks)(blocks[i]);
-    int: num_states = total_block_cells + num_blocks + 2;
+    int: n_blocks = sum(i in index_set(blocks))(blocks[i] > 0);
+  } in n_blocks;
+
+% Constraint: each row must satisfy its block pattern
+constraint forall(r in 1..n_rows) (
+  let {
+    array[int] of int: blocks = [row_constraints[r,i] | i in 1..3 where row_constraints[r,i] > 0];
+    int: n_blocks = length(blocks);
   } in
-  % This is a simplified version - in practice, you'd need to construct the full automaton
-  [1..num_states];
-
-% Constraint: Each row must follow its required pattern
-constraint forall(r in 1..rows) (
-  if row_num_blocks[r] > 0 then
-    % Create regular expression pattern for this row
-    let {
-      array[int] of var 0..1: row_seq = [grid[r,c] | c in 1..cols];
-      % Pattern: 0* (1{block1} 0+ 1{block2} 0+ ... 1{blockN}) 0*
-    } in
-    % For now, use a simpler constraint approach
-    exists(start in 1..cols) (
-      % Check that we can place all required blocks starting from 'start'
-      let {
-        var int: current_pos = start;
-      } in
-      forall(b in 1..row_num_blocks[r]) (
-        % Place block b of length row_blocks[r,b]
-        current_pos + row_blocks[r,b] - 1 <= cols /\
-        forall(i in 0..row_blocks[r,b]-1) (
-          grid[r, current_pos + i] = 1
-        ) /\
-        % Ensure separation (except for last block)
-        if b < row_num_blocks[r] then
-          current_pos + row_blocks[r,b] <= cols /\
-          grid[r, current_pos + row_blocks[r,b]] = 0
-        else true endif
-      )
-    )
-  else
-    % No blocks required - all tiles must be blank
-    forall(c in 1..cols) (grid[r,c] = 0)
+  if n_blocks = 0 then
+    forall(c in 1..n_cols)(grid[r,c] = 0)
+  elseif n_blocks = 1 then
+    regular([grid[r,c] | c in 1..n_cols], 
+            1..3, 3,
+            [| 1,2,1  % state 1: in leading blanks, can stay or go to first block
+             | 0,2,3  % state 2: in first block, must continue block or finish
+             | 1,0,3  % state 3: after first block, must stay in trailing blanks
+             |],
+            1, {3})
+  elseif n_blocks = 2 then
+    regular([grid[r,c] | c in 1..n_cols],
+            1..5, 5,
+            [| 1,2,1,0,0  % state 1: leading blanks
+             | 0,2,3,0,0  % state 2: first block  
+             | 1,0,3,4,1  % state 3: separator (must have at least one blank)
+             | 0,0,0,4,5  % state 4: second block
+             | 1,0,0,0,5  % state 5: trailing blanks
+             |],
+            1, {5})
+  else % n_blocks = 3
+    regular([grid[r,c] | c in 1..n_cols],
+            1..7, 7,
+            [| 1,2,1,0,0,0,0  % state 1: leading blanks
+             | 0,2,3,0,0,0,0  % state 2: first block
+             | 1,0,3,4,1,0,0  % state 3: first separator  
+             | 0,0,0,4,5,0,0  % state 4: second block
+             | 1,0,0,0,5,6,1  % state 5: second separator
+             | 0,0,0,0,0,6,7  % state 6: third block
+             | 1,0,0,0,0,0,7  % state 7: trailing blanks
+             |],
+            1, {7})
   endif
 );
 
-% Constraint: Each column must follow its required pattern
-constraint forall(c in 1..cols) (
-  if col_num_blocks[c] > 0 then
-    exists(start in 1..rows) (
-      let {
-        var int: current_pos = start;
-      } in
-      forall(b in 1..col_num_blocks[c]) (
-        % Place block b of length col_blocks[c,b]
-        current_pos + col_blocks[c,b] - 1 <= rows /\
-        forall(i in 0..col_blocks[c,b]-1) (
-          grid[current_pos + i, c] = 1
-        ) /\
-        % Ensure separation (except for last block)
-        if b < col_num_blocks[c] then
-          current_pos + col_blocks[c,b] <= rows /\
-          grid[current_pos + col_blocks[c,b], c] = 0
-        else true endif
-      )
-    )
-  else
-    % No blocks required - all tiles must be blank
-    forall(r in 1..rows) (grid[r,c] = 0)
+% Constraint: each column must satisfy its block pattern  
+constraint forall(c in 1..n_cols) (
+  let {
+    array[int] of int: blocks = [col_constraints[c,i] | i in 1..3 where col_constraints[c,i] > 0];
+    int: n_blocks = length(blocks);
+  } in
+  if n_blocks = 0 then
+    forall(r in 1..n_rows)(grid[r,c] = 0)
+  elseif n_blocks = 1 then
+    regular([grid[r,c] | r in 1..n_rows], 
+            1..3, 3,
+            [| 1,2,1  % state 1: in leading blanks
+             | 0,2,3  % state 2: in block
+             | 1,0,3  % state 3: in trailing blanks  
+             |],
+            1, {3})
+  elseif n_blocks = 2 then
+    regular([grid[r,c] | r in 1..n_rows],
+            1..5, 5,
+            [| 1,2,1,0,0  % state 1: leading blanks
+             | 0,2,3,0,0  % state 2: first block
+             | 1,0,3,4,1  % state 3: separator
+             | 0,0,0,4,5  % state 4: second block  
+             | 1,0,0,0,5  % state 5: trailing blanks
+             |],
+            1, {5})
+  else % n_blocks = 3
+    regular([grid[r,c] | r in 1..n_rows],
+            1..7, 7,
+            [| 1,2,1,0,0,0,0  % state 1: leading blanks
+             | 0,2,3,0,0,0,0  % state 2: first block
+             | 1,0,3,4,1,0,0  % state 3: first separator
+             | 0,0,0,4,5,0,0  % state 4: second block
+             | 1,0,0,0,5,6,1  % state 5: second separator  
+             | 0,0,0,0,0,6,7  % state 6: third block
+             | 1,0,0,0,0,0,7  % state 7: trailing blanks
+             |],
+            1, {7})
   endif
 );
 
-% Additional constraint: blocks must be maximal (no adjacent filled tiles outside blocks)
-constraint forall(r in 1..rows, c in 1..cols-1) (
-  grid[r,c] = 1 /\ grid[r,c+1] = 1 -> 
-  % These must be part of the same block - handled by block placement constraints
-  true
-);
-
-solve satisfy;
-
-% Output
+% Output the solution
 output [
   if c = 1 then "\n" else "" endif ++
   if grid[r,c] = 1 then "█" else "·" endif
-  | r in 1..rows, c in 1..cols
+  | r in 1..n_rows, c in 1..n_cols
 ] ++ ["\n"];
 
-% Example data (uncomment and modify as needed):
-/*
-rows = 5;
-cols = 5;
-row_num_blocks = [2, 1, 2, 1, 1];
-col_num_blocks = [1, 2, 1, 2, 1];
-row_blocks = array2d(1..5, 1..10, [
-  2,1,0,0,0,0,0,0,0,0,  % Row 1: blocks of length 2,1
-  3,0,0,0,0,0,0,0,0,0,  % Row 2: block of length 3
-  1,1,0,0,0,0,0,0,0,0,  % Row 3: blocks of length 1,1
-  2,0,0,0,0,0,0,0,0,0,  % Row 4: block of length 2
-  1,0,0,0,0,0,0,0,0,0   % Row 5: block of length 1
-]);
-col_blocks = array2d(1..5, 1..10, [
-  1,0,0,0,0,0,0,0,0,0,  % Col 1: block of length 1
-  1,2,0,0,0,0,0,0,0,0,  % Col 2: blocks of length 1,2
-  3,0,0,0,0,0,0,0,0,0,  % Col 3: block of length 3
-  1,1,0,0,0,0,0,0,0,0,  % Col 4: blocks of length 1,1
-  2,0,0,0,0,0,0,0,0,0   % Col 5: block of length 2
-]);
-*/
+solve satisfy;
 ```

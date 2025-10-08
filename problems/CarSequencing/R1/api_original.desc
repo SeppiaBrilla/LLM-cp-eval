@@ -1,52 +1,62 @@
-### Reasoning
+**Reasoning:**
 
-1. **Problem Analysis**: 
-   - We have a set of cars, each with a specific set of options (e.g., air-conditioning, sun-roof). 
-   - Each option corresponds to a station on the assembly line with a capacity constraint: it can handle at most a certain percentage of cars requiring that option in any consecutive group. 
-   - To prevent bunching, for each option, the sequence must ensure that in every consecutive group of size \(N_o\) (derived from the capacity percentage), at most \(M_o\) cars require that option, where \(M_o / N_o = p\) (the capacity percentage).
+1. **Problem Analysis:** The problem requires sequencing a set of cars, each with specific options, such that for each option, the cars requiring it are not bunched together beyond the capacity of the corresponding station. Each station has a capacity defined by parameters \(m_o\) and \(k_o\), meaning that in every consecutive sequence of \(k_o\) cars, at most \(m_o\) cars can require option \(o\).
 
-2. **Key Elements**:
-   - **Cars**: Identified by indices 1 to \(C\), where \(C\) is the total number of cars.
-   - **Options**: Identified by indices 1 to \(O\), where \(O\) is the total number of options.
-   - **Requirement Matrix**: A binary matrix `req` of size \(C \times O\), where `req[i, o] = 1` if car \(i\) requires option \(o\), else 0.
-   - **Capacity Parameters**: For each option \(o\), we are given \(M_o\) (maximum number of cars with the option in any consecutive \(N_o\) cars) and \(N_o\) (window size), such that \(M_o / N_o\) equals the capacity percentage.
+2. **Key Components:**
+   - **Cars and Options:** There are \(n\) cars and \(m\) options. Each car may require multiple options.
+   - **Capacity Constraints:** For each option \(o\), the station can handle at most \(m_o\) cars in any \(k_o\) consecutive cars. This prevents bunching and ensures the station's capacity is not exceeded.
+   - **Sequence Requirement:** The goal is to find a sequence (permutation) of cars that satisfies all capacity constraints for all options.
 
-3. **Decision Variables**:
-   - A sequence `seq` of length \(C\), where `seq[i]` is the car at position \(i\). Since each car appears exactly once, `seq` must be a permutation of 1 to \(C\).
+3. **Modeling Decisions:**
+   - **Variables:** Use a sequence array `seq` where `seq[i]` represents the car at position \(i\). This must be a permutation of all cars.
+   - **Constraints:** 
+     - The `all_different` constraint ensures each car appears exactly once.
+     - For each option \(o\) and each starting position \(s\) in the sequence, the number of cars requiring \(o\) in the window of size \(k_o\) starting at \(s\) must be at most \(m_o\). This is enforced using a sum over the window with `bool2int` to convert boolean requirements to integers.
+   - **Satisfaction Problem:** Since no optimization is mentioned, the model is a satisfaction problem.
 
-4. **Constraints**:
-   - **AllDifferent**: Ensure `seq` is a permutation of cars.
-   - **Capacity Constraints**: For each option \(o\) and each starting position \(s\) from 1 to \(C - N_o + 1\), the number of cars requiring option \(o\) in positions \(s\) to \(s + N_o - 1\) must be at most \(M_o\). If \(N_o > C\), no constraints are added for that option (as there are no consecutive groups of size \(N_o\)).
+4. **Input Parameters:** The model expects:
+   - `n_cars`: Number of cars.
+   - `n_options`: Number of options.
+   - `m`: Array of \(m_o\) values for each option.
+   - `k`: Array of \(k_o\) values for each option.
+   - `requires`: A 2D boolean array where `requires[c, o]` is true if car \(c\) requires option \(o\).
 
-5. **Problem Type**: This is a satisfaction problem (find any feasible sequence), so we use `solve satisfy`.
+5. **Assumptions:** The parameters \(m_o\) and \(k_o\) are provided for each option, derived from the station's capacity percentage (e.g., for 50% capacity, \(m_o = 1\), \(k_o = 2\)).
 
-### MiniZinc Model
-
+**MiniZinc Model:**
 ```minizinc
 % Car Sequencing Problem
-% Parameters
-int: C; % Number of cars
-int: O; % Number of options
-array[1..C, 1..O] of int: req; % Requirement matrix: req[i, o] = 1 if car i requires option o, else 0
-array[1..O] of int: M; % For each option o, maximum number of cars with option o in any consecutive N[o] cars
-array[1..O] of int: N; % For each option o, window size for capacity constraint
+% Parameters:
+%   n_cars: number of cars to sequence
+%   n_options: number of available options
+%   m: for each option, the maximum number of cars with that option in any window of size k[o]
+%   k: for each option, the window size for the capacity constraint
+%   requires: a matrix where requires[c, o] is true if car c requires option o
 
-% Decision variable: sequence of cars
-array[1..C] of var 1..C: seq;
+int: n_cars;
+int: n_options;
+array[1..n_options] of int: m;
+array[1..n_options] of int: k;
+array[1..n_cars, 1..n_options] of bool: requires;
 
-% Constraint: seq must be a permutation of cars 1..C
-constraint alldifferent(seq);
+% Decision variable: sequence of cars, where seq[i] is the car at position i
+array[1..n_cars] of var 1..n_cars: seq;
 
-% Constraint: For each option, in every consecutive block of N[o] cars, at most M[o] cars require the option
-constraint forall(o in 1..O) (
-    forall(s in 1..C - N[o] + 1) (
-        sum(i in s..s + N[o] - 1) (req[seq[i], o]) <= M[o]
+% Constraint: all cars must appear exactly once in the sequence
+constraint all_different(seq);
+
+% Constraints for each option: in every consecutive window of k[o] cars, at most m[o] cars require the option
+constraint forall(o in 1..n_options) (
+    forall(s in 1..(n_cars - k[o] + 1)) (
+        sum(j in s..s + k[o] - 1) (
+            bool2int(requires[seq[j], o])
+        ) <= m[o]
     )
 );
 
-% Solve: find any feasible sequence
+% Solve: satisfy the constraints (find any feasible sequence)
 solve satisfy;
 
-% Output the sequence (optional)
-output ["Sequence: "] ++ [show(seq[i]) ++ " " | i in 1..C];
+% Output: display the sequence of cars
+output ["Sequence: "] ++ [show(seq[i]) ++ " " | i in 1..n_cars];
 ```

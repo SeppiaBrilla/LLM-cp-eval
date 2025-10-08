@@ -1,52 +1,44 @@
 Reasoning:
 
-1. The game board is a 9x9 grid. Each cell is a variable with domain 0..9, where 0 represents an empty cell and 1..9 represent queens with different garments.
+1. **Decision Variables**: The decision variables are the cells of the chess board. Each cell can contain a queen of a certain garment or be empty. We can represent the board as a 2D array of integer variables, where each integer represents a different garment (e.g., 0 for empty, 1 for white hat, 2 for green hat, etc.). We also need to consider the pre-filled spots as part of our decision variables.
 
-2. Decision Variables: The decision variables are the cells of the 9x9 grid. Each cell can take a value from 0 to 9, where 0 represents an empty cell and 1..9 represent queens with different garments.
+2. **Domains**: The domain of each cell is {0, 1, 2, ..., n}, where n is the number of different garments. 0 represents an empty cell, and the other numbers represent the different garments.
 
-3. Domains: The domain of each cell is 0..9.
+3. **Constraints**: The constraints are as follows:
+   - No two queens of the same garment can be in the same row, column, or block.
+   - The pre-filled spots must contain the specified queens.
 
-4. Constraints: 
-   - Each row, column, and 3x3 block must not contain any two queens of the same garment.
-   - Pre-filled cells should have fixed values.
+4. **Objective Function**: The objective is to maximize the number of queens on the board. This can be achieved by maximizing the sum of all cells in the board (since 0 represents an empty cell and the other numbers represent queens).
 
-5. Objective Function: The objective is to maximize the number of queens on the board. This can be achieved by maximizing the sum of all cells, as each queen contributes a value of 1..9 to the sum, while empty cells contribute 0.
-
-6. This is an optimization problem, as we are trying to maximize the number of queens on the board.
-
-7. Simplifications: We can simplify the problem by treating it as a variant of the Sudoku problem, where each cell can take a value from 0 to 9, and the constraints are similar to those of Sudoku.
+5. **Simplifications or Modeling Choices**: We can simplify the problem by treating the pre-filled spots as fixed variables, which reduces the number of decision variables. We can also simplify the block constraint by dividing the board into 3x3 blocks and ensuring that no two queens of the same garment are in the same block.
 
 MiniZinc model:
-
 ```minizinc
-% Game solver
-array[1..9, 1..9] of var 0..9: grid;
+% Define the size of the board and the number of garments
+int: n = 9;
+int: num_garments = 3;  % for example
 
-% Constraint: Each row, column, and 3x3 block must not contain any two queens of the same garment.
-constraint
-  forall(i in 1..9) (
-    forall(g in 1..9) (
-      sum(j in 1..9)(grid[i, j] = g) <= 1
-    )
-  )
-  /\ forall(j in 1..9) (
-    forall(g in 1..9) (
-      sum(i in 1..9)(grid[i, j] = g) <= 1
-    )
-  )
-  /\ forall(r in 0..2, c in 0..2) (
-    forall(g in 1..9) (
-      sum(i, j in 1..3)(grid[3*r + i, 3*c + j] = g) <= 1
-    )
-  );
+% Define the board
+array[1..n, 1..n] of var 0..num_garments: board;
 
-% Add constraints for pre-filled cells as needed:
-% constraint grid[4,7] = 1; % blue_queen
+% Define the pre-filled spots
+% For example, cell[3,6] = blue_queen
+% We represent blue_queen as 2
+constraint board[3,6] = 2;
 
-% Objective: Maximize the number of queens on the board.
-solve maximize sum(i in 1..9, j in 1..9)(grid[i, j]);
+% No two queens of the same garment can be in the same row or column
+include "alldifferent.mzn";
+constraint forall(i in 1..n) (
+  alldifferent([board[i,j] | j in 1..n]) /\ 
+  alldifferent([board[j,i] | j in 1..n])
+);
 
-output [ "grid = \(grid)" ];
+% No two queens of the same garment can be in the same block
+constraint forall(bi in 0..2, bj in 0..2) (
+  alldifferent([board[i+bi*3,j+bj*3] | i in 1..3, j in 1..3])
+);
+
+% Maximize the number of queens on the board
+solve maximize sum(i in 1..n, j in 1..n) (if board[i,j] > 0 then 1 else 0 endif);
 ```
-
-In the above model, replace the comment `% constraint grid[4,7] = 1; % blue_queen` with the actual pre-filled cells. The number `1` represents the blue_queen. If there are other pre-filled cells, add similar constraints for them.
+This model assumes that the number of garments is less than or equal to the size of the board. If there are more garments than the size of the board, the model needs to be adjusted accordingly.

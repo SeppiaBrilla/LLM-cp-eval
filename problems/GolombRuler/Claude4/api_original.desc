@@ -1,81 +1,86 @@
 **Reasoning:**
 
-1. **Decision Variables**: We need m variables representing the positions of marks on the ruler: a₁, a₂, ..., aₘ where a₁ = 0 and a₁ < a₂ < ... < aₘ.
+1. **Decision Variables**: We need to represent the m marks on the Golomb ruler. Let's use an array `marks` of size m, where `marks[i]` represents the position of the i-th mark (a_i in the problem description).
 
-2. **Domains**: Since a₁ = 0 is fixed, we need variables a₂, ..., aₘ. The upper bound for aₘ (ruler length) is not known a priori, but we can use a reasonable upper bound or make it a parameter to minimize.
+2. **Domains**: 
+   - The first mark is fixed at 0: `marks[1] = 0`
+   - The other marks are positive integers with an upper bound. Since we want to minimize length, we need a reasonable upper bound. A loose upper bound could be based on the trivial ruler where marks are at positions 0, 1, 3, 6, 10, ... (triangular numbers), but we can use a simpler bound like `m*(m-1)` which should be sufficient for most cases.
 
-3. **Core Constraints**:
-   - Ordering: 0 = a₁ < a₂ < ... < aₘ
-   - Distinctness: All differences aⱼ - aᵢ (where 1 ≤ i < j ≤ m) must be distinct
-   - Symmetry breaking: a₂ - a₁ < aₘ - aₘ₋₁ (equivalently: a₂ < aₘ - aₘ₋₁)
+3. **Constraints**:
+   - **Ordering constraint**: The marks must be in strictly increasing order: `marks[i] < marks[i+1]` for all valid i
+   - **Distinct differences constraint**: All pairwise differences `marks[j] - marks[i]` for `i < j` must be distinct
+   - **Symmetry breaking constraint**: `marks[2] - marks[1] < marks[m] - marks[m-1]`, which means the first difference is less than the last difference
 
-4. **Objective**: This is an optimization problem - minimize the length of the ruler (aₘ).
+4. **Objective Function**: This is an optimization problem where we want to minimize the length of the ruler, which is `marks[m]` (the position of the last mark).
 
-5. **Modeling choices**: 
-   - We can represent the differences explicitly as auxiliary variables to make the distinctness constraint clearer
-   - We need to calculate how many differences there are: m(m-1)/2
-   - We need a reasonable upper bound for the ruler length - this can be estimated or made large enough
-
-6. **Implementation details**:
-   - Use array indexing starting from 1 for marks a[1..m] where a[1] = 0
-   - Create an array for all differences
-   - Use alldifferent constraint on the differences array
+5. **Modeling Choices**: 
+   - We'll use a 1-indexed array for marks to match the mathematical notation
+   - For the distinct differences constraint, we need to create an array of all possible differences and ensure they are all different
+   - The number of differences is exactly `m*(m-1)/2` as stated in the problem
 
 **MiniZinc model:**
 
 ```minizinc
 % Golomb Ruler Problem
-% Find m marks on a ruler such that all pairwise differences are distinct
-% and the ruler length is minimized
+% Find a set of m marks with minimum length such that all pairwise differences are distinct
 
 % Parameters
 int: m;  % number of marks
-int: max_length = m * m;  % upper bound estimate for ruler length
+
+% Upper bound for mark positions (can be adjusted for better performance)
+int: max_length = m * (m - 1);
 
 % Decision variables
 array[1..m] of var 0..max_length: marks;
 
-% Fix first mark at position 0
+% The first mark is always at position 0
 constraint marks[1] = 0;
 
-% Ordering constraint: marks must be in strictly increasing order
+% Marks must be in strictly increasing order
 constraint forall(i in 1..m-1) (
     marks[i] < marks[i+1]
 );
 
-% Calculate all pairwise differences
+% All pairwise differences must be distinct
+% Create array of all differences
 int: num_diffs = m * (m - 1) div 2;
 array[1..num_diffs] of var 1..max_length: differences;
 
 % Map differences to the difference array
-constraint
+constraint 
     let {
         array[1..num_diffs] of int: diff_indices = 
             [i * m + j - (i * (i + 1)) div 2 | i in 1..m-1, j in i+1..m]
     } in
     forall(k in 1..num_diffs) (
         let {
-            int: i = min([i | i in 1..m-1, j in i+1..m 
-                         where i * m + j - (i * (i + 1)) div 2 = k]),
-            int: j = min([j | i in 1..m-1, j in i+1..m 
-                         where i * m + j - (i * (i + 1)) div 2 = k])
+            int: i = min([i | i in 1..m-1 where exists(j in i+1..m) 
+                         (i * m + j - (i * (i + 1)) div 2 = k)]),
+            int: j = min([j | j in 2..m where exists(i in 1..j-1) 
+                         (i * m + j - (i * (i + 1)) div 2 = k)])
         } in
         differences[k] = marks[j] - marks[i]
     );
 
-% All differences must be distinct
-constraint alldifferent(differences);
+% Simpler approach for the differences constraint
+constraint
+    let {
+        array[1..num_diffs] of var 1..max_length: diffs = 
+            [marks[j] - marks[i] | i in 1..m-1, j in i+1..m]
+    } in
+    alldifferent(diffs);
 
-% Symmetry breaking constraint: first difference < last difference
+% Symmetry breaking: first difference < last difference
 constraint marks[2] - marks[1] < marks[m] - marks[m-1];
 
-% Objective: minimize ruler length
-solve minimize marks[m];
+% Objective: minimize the length of the ruler
+var 0..max_length: length = marks[m];
+solve minimize length;
 
 % Output
 output [
     "Marks: " ++ show(marks) ++ "\n" ++
-    "Length: " ++ show(marks[m]) ++ "\n" ++
-    "Differences: " ++ show(differences) ++ "\n"
+    "Length: " ++ show(length) ++ "\n" ++
+    "Differences: " ++ show([marks[j] - marks[i] | i in 1..m-1, j in i+1..m]) ++ "\n"
 ];
 ```

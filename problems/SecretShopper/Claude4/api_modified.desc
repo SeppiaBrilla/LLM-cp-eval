@@ -3,41 +3,46 @@
 1. **Decision Variables:**
    - We need to track which agent visits which location in which week
    - Each agent must visit exactly one location per zone over the 4 weeks
-   - We need to ensure the visit distribution meets the officer visit requirements
+   - We need to ensure the visit distribution meets the constraints
 
-2. **Key Parameters:**
-   - 4 zones with locations: Zone 1 (1-5), Zone 2 (6-10), Zone 3 (11-15), Zone 4 (16-19)
+2. **Key Constraints Analysis:**
    - 40 agents total (4 groups × 10 agents each)
-   - 35 officers total across all locations (1-4 officers per location)
-   - Each officer needs exactly 4 visits over 4 weeks
-   - Each officer needs exactly 2 visits in the first 2 weeks
-   - Each agent visits exactly one location per zone (4 visits total per agent)
+   - 19 locations with 1-4 officers each, totaling 35 officers
+   - Each officer gets exactly 4 visits over 4 weeks (140 total visits)
+   - Each officer must get 2 visits in first 2 weeks
+   - Each agent visits one location per zone (4 visits total per agent)
+   - 40 agents × 4 visits = 160 total agent-visits, but we only need 140 visits to officers
 
-3. **Decision Variables:**
+3. **Variables Needed:**
    - `visit[agent, week, location]`: binary variable indicating if agent visits location in given week
-   - We need to track officers per location to ensure visit requirements are met
+   - `officers_per_location[location]`: number of officers at each location (1-4)
+   - Zone assignments: Zone 1 (1-5), Zone 2 (6-10), Zone 3 (11-15), Zone 4 (16-19)
 
 4. **Constraints:**
    - Each agent visits exactly one location per week
-   - Each agent visits exactly one location per zone over all weeks
-   - Officer visit requirements: 4 total visits, 2 in first 2 weeks
-   - Location capacity constraints (1-4 officers per location, totaling 35)
+   - Each agent visits exactly one location per zone over the 4 weeks
+   - Total visits to each location × officers at that location = officer visits
+   - Each officer gets exactly 2 visits in weeks 1-2 and 2 visits in weeks 3-4
+   - Sum of officers across all locations = 35
+   - Total officer visits = 140
 
 5. **Modeling Approach:**
-   - We'll need to define the number of officers at each location
-   - Track visits to ensure each officer gets the required number of visits
-   - This is a satisfaction problem (no explicit objective function needed)
+   - This is a satisfaction problem (no explicit objective to optimize)
+   - We need to find a feasible assignment that satisfies all constraints
+   - The constraint about officers per location needs to be satisfied such that total officers = 35
 
 **MiniZinc model:**
 
 ```minizinc
-% Police Officer Observation Scheduling
+% Police Officer Observation Scheduling Problem
 
 % Parameters
 int: num_agents = 40;
 int: num_weeks = 4;
 int: num_locations = 19;
 int: total_officers = 35;
+int: visits_per_officer = 4;
+int: early_visits_per_officer = 2;
 
 % Zone definitions
 set of int: zone1 = 1..5;
@@ -45,55 +50,66 @@ set of int: zone2 = 6..10;
 set of int: zone3 = 11..15;
 set of int: zone4 = 16..19;
 
-% Decision variable: officers at each location (1-4 per location)
-array[1..num_locations] of var 1..4: officers_at_location;
-
-% Constraint: total officers across all locations = 35
-constraint sum(officers_at_location) = total_officers;
-
-% Decision variable: agent visits location in week
+% Decision variables
+% visit[a,w,l] = 1 if agent a visits location l in week w
 array[1..num_agents, 1..num_weeks, 1..num_locations] of var 0..1: visit;
 
-% Constraint: Each agent visits exactly one location per week
-constraint forall(a in 1..num_agents, w in 1..num_weeks) (
-    sum(l in 1..num_locations)(visit[a, w, l]) = 1
+% Number of officers at each location (1-4)
+array[1..num_locations] of var 1..4: officers_per_location;
+
+% Constraints
+
+% Total officers across all locations must equal 35
+constraint sum(l in 1..num_locations)(officers_per_location[l]) = total_officers;
+
+% Each agent visits exactly one location per week
+constraint forall(a in 1..num_agents, w in 1..num_weeks)(
+    sum(l in 1..num_locations)(visit[a,w,l]) = 1
 );
 
-% Constraint: Each agent visits exactly one location per zone over all weeks
-constraint forall(a in 1..num_agents) (
-    sum(w in 1..num_weeks, l in zone1)(visit[a, w, l]) = 1 /\
-    sum(w in 1..num_weeks, l in zone2)(visit[a, w, l]) = 1 /\
-    sum(w in 1..num_weeks, l in zone3)(visit[a, w, l]) = 1 /\
-    sum(w in 1..num_weeks, l in zone4)(visit[a, w, l]) = 1
+% Each agent visits exactly one location per zone over the 4 weeks
+constraint forall(a in 1..num_agents)(
+    sum(w in 1..num_weeks, l in zone1)(visit[a,w,l]) = 1 /\
+    sum(w in 1..num_weeks, l in zone2)(visit[a,w,l]) = 1 /\
+    sum(w in 1..num_weeks, l in zone3)(visit[a,w,l]) = 1 /\
+    sum(w in 1..num_weeks, l in zone4)(visit[a,w,l]) = 1
 );
 
-% Constraint: Each officer receives exactly 4 visits total
-constraint forall(l in 1..num_locations) (
-    sum(a in 1..num_agents, w in 1..num_weeks)(visit[a, w, l]) = 
-    4 * officers_at_location[l]
+% Each officer receives exactly 4 visits total
+constraint forall(l in 1..num_locations)(
+    sum(a in 1..num_agents, w in 1..num_weeks)(visit[a,w,l]) = 
+    officers_per_location[l] * visits_per_officer
 );
 
-% Constraint: Each officer receives exactly 2 visits in first 2 weeks
-constraint forall(l in 1..num_locations) (
-    sum(a in 1..num_agents, w in 1..2)(visit[a, w, l]) = 
-    2 * officers_at_location[l]
+% Each officer receives exactly 2 visits in first 2 weeks
+constraint forall(l in 1..num_locations)(
+    sum(a in 1..num_agents, w in 1..2)(visit[a,w,l]) = 
+    officers_per_location[l] * early_visits_per_officer
 );
 
-% Solve satisfaction problem
-solve satisfy;
+% Each officer receives exactly 2 visits in last 2 weeks (implied by above constraints)
+constraint forall(l in 1..num_locations)(
+    sum(a in 1..num_agents, w in 3..4)(visit[a,w,l]) = 
+    officers_per_location[l] * early_visits_per_officer
+);
 
-% Output formatting
+% Output
 output [
-    "Officers per location:\n"
-] ++ [
-    "Location " ++ show(l) ++ ": " ++ show(officers_at_location[l]) ++ " officers\n"
-    | l in 1..num_locations
-] ++ [
-    "\nVisit schedule (Agent, Week, Location):\n"
-] ++ [
-    "Agent " ++ show(a) ++ ", Week " ++ show(w) ++ ": Location " ++ 
-    show(l) ++ "\n"
-    | a in 1..num_agents, w in 1..num_weeks, l in 1..num_locations 
-    where visit[a, w, l] = 1
+    "Officers per location: " ++ show(officers_per_location) ++ "\n" ++
+    "Total officers: " ++ show(sum(officers_per_location)) ++ "\n" ++
+    "Visit schedule:\n"
+] ++
+[
+    "Week " ++ show(w) ++ ":\n" ++
+    concat([
+        "  Agent " ++ show(a) ++ " -> Location " ++ 
+        show(l) ++ " (Zone " ++ 
+        show(if l in zone1 then 1 elseif l in zone2 then 2 elseif l in zone3 then 3 else 4 endif) ++ 
+        ")\n"
+        | a in 1..num_agents, l in 1..num_locations where visit[a,w,l] = 1
+    ])
+    | w in 1..num_weeks
 ];
+
+solve satisfy;
 ```

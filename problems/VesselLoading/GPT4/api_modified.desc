@@ -1,49 +1,53 @@
 Reasoning:
 
-1. Decision Variables: The decision variables are the coordinates of the bottom-left corner of each artwork in the gallery. These are integer variables, as we assume that the coordinates are given in a discrete grid (e.g., centimeters). We will denote these variables as `x[i]` and `y[i]` for each artwork `i`.
+1. Decision Variables:
+   - The position of each artwork in the gallery. This can be represented as a 2D array of integers, where each cell represents a position in the gallery and the integer value represents the artwork placed at that position. The value 0 can be used to represent an empty space.
 
-2. Domains: The domains of the `x[i]` and `y[i]` variables are determined by the size of the gallery. If the gallery is `W` units wide and `H` units high, then `x[i]` is in the range `1..W` and `y[i]` is in the range `1..H`.
+2. Domains:
+   - The domain of each cell in the 2D array is the set of all artwork IDs plus 0 (representing an empty space). The number of artworks is given as input.
 
-3. Constraints: There are several types of constraints in this problem:
-   - **Non-overlap constraints**: Each pair of artworks `(i, j)` must not overlap. This can be expressed as a disjunction of four conditions: either artwork `i` is to the left of artwork `j`, or to the right, or above, or below.
-   - **Distance constraints**: For each pair of artworks `(i, j)` that belong to categories that must be distanced, the Manhattan distance between `i` and `j` must be at least the required distance.
-   - **Size constraints**: Each artwork must fit within the gallery. This means that `x[i] + width[i] <= W` and `y[i] + height[i] <= H` for each artwork `i`.
+3. Constraints:
+   - Each artwork must be placed in a unique position in the gallery. This can be enforced by ensuring that each artwork ID appears exactly once in the 2D array.
+   - The size of each artwork must be respected. This can be enforced by ensuring that the artwork fits within the dimensions of the gallery.
+   - The distance rules between artworks must be respected. This can be enforced by ensuring that for each pair of artworks that must be distanced, the Manhattan distance between their positions is at least the required distance.
+   - The impact space of each artwork must be respected. This can be enforced by ensuring that for each artwork, the surrounding cells within the impact radius are empty.
 
-4. This is a satisfaction problem, as we are only interested in finding a feasible arrangement of the artworks, not in optimizing any objective.
+4. Objective Function:
+   - This is a satisfaction problem. The objective is to find a valid arrangement of artworks in the gallery, if one exists.
 
-5. Potential simplifications or modeling choices: If the number of artworks is large, it may be beneficial to use a global constraint such as `cumulative` to handle the non-overlap constraints. However, this would require transforming the problem into a scheduling problem, which may complicate the model. For simplicity, we will use a straightforward approach based on pairwise constraints.
+5. Potential Simplifications or Modeling Choices:
+   - The problem can be simplified by assuming that the gallery is large enough to accommodate all artworks. If this is not the case, the problem becomes infeasible.
+   - The problem can be modeled as a constraint satisfaction problem (CSP), where the goal is to find an assignment of values to variables that satisfies all constraints.
 
 MiniZinc model:
 
 ```minizinc
-% Parameters
-int: W; % Width of the gallery
-int: H; % Height of the gallery
-set of int: ARTWORKS; % Set of artworks
-array[ARTWORKS] of int: width; % Width of each artwork
-array[ARTWORKS] of int: height; % Height of each artwork
-array[ARTWORKS, ARTWORKS] of int: dist; % Required distance between each pair of artworks
+% Define the parameters
+int: n; % number of artworks
+set of int: ARTWORKS = 1..n;
+int: w; % width of the gallery
+int: h; % height of the gallery
+array[ARTWORKS] of int: size; % size of each artwork
+array[ARTWORKS] of int: impact; % impact space of each artwork
+array[ARTWORKS, ARTWORKS] of int: distance; % distance rules between artworks
 
-% Decision variables
-array[ARTWORKS] of var 1..W: x; % x-coordinate of each artwork
-array[ARTWORKS] of var 1..H: y; % y-coordinate of each artwork
+% Define the decision variables
+array[1..w, 1..h] of var 0..n: gallery;
 
-% Constraints
-constraint forall(i in ARTWORKS)(
-  x[i] + width[i] <= W /\ y[i] + height[i] <= H
-);
+% Each artwork must be placed in a unique position in the gallery
+constraint forall(i in ARTWORKS)(sum([gallery[x, y] = i | x in 1..w, y in 1..h]) = 1);
 
-constraint forall(i in ARTWORKS, j in ARTWORKS where i < j)(
-  x[i] + width[i] <= x[j] \/ x[j] + width[j] <= x[i] \/
-  y[i] + height[i] <= y[j] \/ y[j] + height[j] <= y[i]
-);
+% The size of each artwork must be respected
+constraint forall(i in ARTWORKS, x in 1..w, y in 1..h)(if gallery[x, y] = i then x + size[i] <= w /\ y + size[i] <= h else true endif);
 
-constraint forall(i in ARTWORKS, j in ARTWORKS where i != j)(
-  abs(x[i] - x[j]) + abs(y[i] - y[j]) >= dist[i, j]
-);
+% The distance rules between artworks must be respected
+constraint forall(i in ARTWORKS, j in ARTWORKS where i < j, x1 in 1..w, y1 in 1..h, x2 in 1..w, y2 in 1..h)(if gallery[x1, y1] = i /\ gallery[x2, y2] = j then abs(x1 - x2) + abs(y1 - y2) >= distance[i, j] else true endif);
 
-% Solve
+% The impact space of each artwork must be respected
+constraint forall(i in ARTWORKS, x in 1..w, y in 1..h)(if gallery[x, y] = i then forall(dx in -impact[i]..impact[i], dy in -impact[i]..impact[i])(x + dx >= 1 /\ x + dx <= w /\ y + dy >= 1 /\ y + dy <= h -> gallery[x + dx, y + dy] = 0) else true endif);
+
+% Solve the problem
 solve satisfy;
 ```
 
-This model assumes that the `dist` array is symmetric and that `dist[i, i] = 0` for all `i`. If the distance requirements are not symmetric or if there are non-zero distances between artworks of the same category, the model would need to be adjusted accordingly.
+This model assumes that the size and impact space of each artwork are represented as the length of a side of a square, and that the distance rules are represented as the Manhattan distance between the centers of the artworks. The model also assumes that the gallery is large enough to accommodate all artworks. If this is not the case, the problem becomes infeasible.

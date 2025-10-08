@@ -1,55 +1,50 @@
 Reasoning:
 
-1. Decision Variables: 
-   - The x and y coordinates of the bottom left corner of each square. These are integer variables.
-   - The size of the packing square. This is an integer variable.
+1. **Decision Variables**: The decision variables in this problem are the coordinates (x, y) of the bottom-left corner of each square and the size of the packing square. The coordinates will determine the placement of each square within the packing square, and the size of the packing square will determine the total area that we have to fill.
 
-2. Domains: 
-   - The x and y coordinates of each square are in the range 0..size of the packing square.
-   - The size of the packing square is in the range of the sum of the areas of all squares to the square of the maximum dimension of a square.
+2. **Domains**: The domain of the coordinates (x, y) is from 0 to the size of the packing square. The domain of the size of the packing square is from the size of the largest square to the sum of the areas of all squares.
 
-3. Constraints: 
-   - The squares must not overlap. This can be ensured by checking that for every pair of squares, one square's right edge is to the left of the other square's left edge, or one square's left edge is to the right of the other square's right edge, or one square's top edge is below the other square's bottom edge, or one square's bottom edge is above the other square's top edge.
-   - The squares must be within the packing square. This can be ensured by checking that for each square, its right edge is not beyond the right edge of the packing square, its left edge is not beyond the left edge of the packing square, its top edge is not beyond the top edge of the packing square, and its bottom edge is not beyond the bottom edge of the packing square.
-   - The sum of the areas of all squares is equal to the area of the packing square.
+3. **Constraints**: The constraints for this problem are:
+   - Each square must be within the packing square. This means that for each square, x + size <= packing square size and y + size <= packing square size.
+   - No two squares can overlap. This means that for any two squares i and j, either i's right edge is to the left of j's left edge, i's left edge is to the right of j's right edge, i's top edge is below j's bottom edge, or i's bottom edge is above j's top edge.
+   - All squares must be used, and the total area of the squares must equal the area of the packing square.
+   - All squares have different sizes.
 
-4. This is a satisfaction problem as we are looking for a feasible solution that satisfies all the constraints.
+4. **Objective Function**: This is a satisfaction problem, so there is no objective function. We are simply trying to find a valid placement of the squares that satisfies all the constraints.
 
-5. Potential Simplifications: 
-   - We can sort the squares in decreasing order of their sizes. This can potentially reduce the search space as larger squares have fewer placement options.
+5. **Modeling Choices**: One potential simplification is to assume that the squares are sorted in non-increasing order of size. This can make it easier to find a valid placement, as we can start by placing the largest squares and then fill in the smaller squares around them.
 
 MiniZinc model:
 
 ```minizinc
-% Perfect Square Placement Problem
+% Define the number of squares and their sizes
+int: n; % number of squares
+array[1..n] of int: sizes; % sizes of the squares
 
-% Number of squares
-int: n;
+% Define the decision variables
+array[1..n] of var 0..sum(sizes): x; % x-coordinates of the squares
+array[1..n] of var 0..sum(sizes): y; % y-coordinates of the squares
+var max(sizes)..sum(sizes): packing_size; % size of the packing square
 
-% Sizes of the squares
-array[1..n] of int: sizes;
+% Each square must be within the packing square
+constraint forall(i in 1..n) (
+  x[i] + sizes[i] <= packing_size /\ y[i] + sizes[i] <= packing_size
+);
 
-% Decision variables
-array[1..n] of var 0..sum(sizes): x;
-array[1..n] of var 0..sum(sizes): y;
-var max(sizes)..sum(sizes): size;
-
-% Squares must not overlap
+% No two squares can overlap
 constraint forall(i in 1..n, j in i+1..n) (
   x[i] + sizes[i] <= x[j] \/ x[j] + sizes[j] <= x[i] \/
   y[i] + sizes[i] <= y[j] \/ y[j] + sizes[j] <= y[i]
 );
 
-% Squares must be within the packing square
-constraint forall(i in 1..n) (
-  x[i] + sizes[i] <= size /\ y[i] + sizes[i] <= size
+% The total area of the squares must equal the area of the packing square
+constraint sum(i in 1..n) (sizes[i]*sizes[i]) = packing_size*packing_size;
+
+% All squares have different sizes
+constraint forall(i in 1..n, j in i+1..n) (
+  sizes[i] != sizes[j]
 );
 
-% The sum of the areas of all squares is equal to the area of the packing square
-constraint sum(i in 1..n) (sizes[i]*sizes[i]) = size*size;
-
-% Solve
+% Solve the problem
 solve satisfy;
 ```
-
-This model assumes that the sizes of the squares are given as input. The x and y coordinates of the squares and the size of the packing square are the decision variables. The constraints ensure that the squares do not overlap and are within the packing square. The objective is to find a feasible solution that satisfies all the constraints.

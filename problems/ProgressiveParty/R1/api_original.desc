@@ -1,84 +1,95 @@
 **Reasoning:**
 
-1. **Problem Overview**: The problem involves scheduling a party at a yacht club with 42 boats. Some boats are designated as hosts, and the remaining boats are guests. There are 6 time periods. Each guest boat visits one host boat per period, and cannot revisit the same host boat. Additionally, any two guest crews cannot meet more than once (i.e., they cannot be at the same host boat in more than one period). The goal is to minimize the number of host boats.
+1. **Problem Overview**: The goal is to schedule a party with boats as hosts or guests over six time periods, minimizing the number of host boats. Host boats stay on board, while guest boats visit hosts each period. Constraints include capacity limits, distinct host visits per guest, and guest crews meeting at most once.
 
-2. **Boats and Capacities**: Boats 1 to 39 have positive capacities and can be hosts. Boats 40, 41, and 42 have capacity 0 and must be guests. The capacities and crew sizes are given in arrays.
+2. **Key Elements**:
+   - There are 42 boats, each with a capacity and crew size.
+   - Boats with capacity 0 (40,41,42) cannot be hosts and must be guests.
+   - Each guest boat must visit a different host in each of the six periods.
+   - The total people on a host boat in any period (host crew plus guest crews) must not exceed its capacity.
+   - For any two guest boats, they share the same host in at most one period.
 
 3. **Decision Variables**:
-   - `is_host[b]` for each boat `b` (1..42): a Boolean variable indicating if boat `b` is a host. For boats 40-42, this is fixed to false.
-   - `visit[b,t]` for each boat `b` and period `t`: the host boat that boat `b` is at during period `t`. For host boats, this is fixed to themselves; for guest boats, this must be a host boat.
+   - `is_host[i]`: Boolean variable for each boat i, true if it is a host.
+   - `assign[i,t]`: Integer variable for each boat i and period t, indicating the host boat assigned to i in period t. For hosts, `assign[i,t] = i`.
 
 4. **Constraints**:
-   - **Host Assignment**: Boats 40-42 are not hosts.
-   - **Visit Assignment**: For each boat and period, if it is a host, `visit[b,t] = b`; otherwise, `visit[b,t]` must be a host boat (i.e., `is_host[visit[b,t]]` is true).
-   - **No Revisit**: For each guest boat, the hosts visited across periods must all be different (enforced with `alldifferent`).
-   - **No Meet Twice**: For any two distinct guest boats, the number of periods where they visit the same host is at most one.
-   - **Capacity**: For each host boat and period, the total crew size of all boats at that host (including the host itself) must not exceed the host's capacity.
+   - Boats 40,41,42 must not be hosts.
+   - For hosts, `assign[i,t] = i` for all periods.
+   - For guests, `assign[i,t]` must be a host boat.
+   - Each guest must visit distinct hosts over the six periods.
+   - For any two guests, the number of periods with the same host assignment is at most one.
+   - For each host and period, the sum of crew sizes assigned to it must not exceed its capacity.
 
-5. **Objective**: Minimize the number of host boats from 1 to 39 (since boats 40-42 cannot be hosts).
+5. **Objective**: Minimize the number of host boats (`sum(is_host)`).
 
-6. **Modeling Notes**: The model uses constraints with conditionals to handle the dynamic sets of hosts and guests. The capacity constraint sums crew sizes for all boats at a host, which automatically includes the host crew. The no-meet-twice constraint is applied only to pairs of guest boats.
+6. **Modeling Notes**:
+   - The assignment variable `assign[i,t]` is defined for all boats and periods, simplifying constraints by using `assign[i,t] = i` for hosts.
+   - Capacity constraints are applied to all boats, but only hosts have non-zero assignments due to other constraints.
+   - The meeting constraint is applied only to pairs of guest boats.
 
-**MiniZinc model:**
+**MiniZinc Model:**
+
 ```minizinc
-% Yacht Club Party Timetabling Problem
-% Minimize the number of host boats subject to constraints.
-
+% MiniZinc model for yacht club party scheduling
+% Boats: 1 to 42
 set of int: BOATS = 1..42;
-int: T = 6; % Number of time periods
+% Number of time periods
+int: periods = 6;
+set of int: PERIODS = 1..periods;
 
 % Capacity and crew size arrays
 array[BOATS] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0];
-array[BOATS] of int: crew_size = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
+array[BOATS] of int: crew = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4];
 
-% Decision variables: is_host[b] is true if boat b is a host
+% Decision variables
 array[BOATS] of var bool: is_host;
+array[BOATS, PERIODS] of var BOATS: assign;
 
-% visit[b,t] is the host boat that boat b is at during period t
-array[BOATS, 1..T] of var BOATS: visit;
+% Constraints
 
-% Constraint: Boats 40,41,42 are not hosts
-constraint forall(b in 40..42) (not is_host[b]);
+% Boats with capacity 0 cannot be hosts
+constraint forall(i in {40,41,42}) (not is_host[i]);
 
-% Constraint: For each boat and period, if host, visit is itself; else, visit must be a host
-constraint forall(b in BOATS, t in 1..T) (
-    if is_host[b] then
-        visit[b,t] == b
+% For hosts, assign[i,t] = i for all periods
+% For guests, assign[i,t] must be a host boat
+constraint forall(i in BOATS, t in PERIODS) (
+    if is_host[i] then
+        assign[i,t] == i
     else
-        is_host[visit[b,t]]
+        is_host[assign[i,t]]
+    endif
 );
 
-% Constraint: No revisit for guest boats - each guest visits different hosts across periods
-constraint forall(b in BOATS) (
-    if not is_host[b] then
-        alldifferent([visit[b,t] | t in 1..T])
-    else
-        true
-);
-
-% Constraint: No meet twice - any two guest crews meet at most once
-constraint forall(g1, g2 in BOATS where g1 < g2) (
-    if not is_host[g1] /\ not is_host[g2] then
-        sum(t in 1..T) (bool2int(visit[g1,t] == visit[g2,t])) <= 1
+% Each guest must visit distinct hosts over periods
+constraint forall(i in BOATS) (
+    if not is_host[i] then
+        all_different([assign[i,t] | t in PERIODS])
     else
         true
+    endif
 );
 
-% Constraint: Capacity - for each host and period, total people <= capacity
-constraint forall(h in BOATS, t in 1..T) (
-    if is_host[h] then
-        sum(b in BOATS) (bool2int(visit[b,t] == h) * crew_size[b] <= capacity[h]
-    else
-        true
+% Guest crews meet at most once: for any two guests, same host in at most one period
+constraint forall(i,j in BOATS where i < j) (
+    (not is_host[i] /\ not is_host[j]) -> 
+    sum(t in PERIODS) (assign[i,t] == assign[j,t]) <= 1
 );
 
-% Objective: Minimize the number of host boats (from 1 to 39)
-solve minimize sum(b in 1..39) (bool2int(is_host[b]));
+% Capacity constraint: for each boat and period, total crew assigned must not exceed capacity
+constraint forall(h in BOATS, t in PERIODS) (
+    sum(i in BOATS) (crew[i] * (assign[i,t] == h)) <= capacity[h]
+);
 
-% Output: Display host boats and assignment for each period
+% Objective: minimize number of host boats
+solve minimize sum(i in BOATS) (is_host[i]);
+
+% Output: show the host boats and assignments for guests
 output [
-    "Host boats: " ++ show([b | b in BOATS where fix(is_host[b])]) ++ "\n",
-    "Assignment (row: boat, column: period):\n" ++
-    show2d([ if fix(is_host[b]) then "H" else show(visit[b,t]) endif | b in BOATS, t in 1..T ])
+    "Host boats: " ++ show([i | i in BOATS where fix(is_host[i])]) ++ "\n"
+] ++ [
+    "Assignment for period " ++ show(t) ++ ": " ++ 
+    show([if fix(is_host[i]) then "host" else show(assign[i,t]) endif | i in BOATS]) ++ "\n"
+    | t in PERIODS
 ];
 ```

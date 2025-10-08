@@ -1,213 +1,163 @@
-**Reasoning:**
+### Reasoning
 
-1. **Problem Understanding**: Nonograms require shading cells in a grid such that the sequences of consecutive shaded cells in each row and column match the given clues. Each clue is a list of integers representing the lengths of shaded blocks, which must be separated by at least one unshaded cell.
+1. **Problem Analysis**: Nonograms involve a grid where each row and column has constraints specifying the sequence of consecutive shaded blocks. The goal is to find a grid assignment where the shaded cells in each row and column match the given block sequences in order, with at least one unshaded cell between blocks.
 
-2. **Grid Representation**: The grid is modeled as a 2D array of Boolean variables, where `true` indicates a shaded cell and `false` indicates an unshaded cell.
+2. **Decision Variables**: Use a 2D Boolean array `grid` of size `R x C`, where `true` represents shaded and `false` unshaded.
 
-3. **Constraints**:
-   - For each row, the sequence of shaded/unshaded cells must satisfy the row clue.
-   - For each column, the sequence must satisfy the column clue.
-   - This is a satisfaction problem (no optimization objective).
+3. **Domains**: The Boolean variables naturally have domains `{true, false}`.
 
-4. **Modeling Approach**: Use the `regular` constraint to enforce the sequence patterns. The `regular` constraint relies on a deterministic finite automaton (DFA) that accepts only sequences matching the clue.
+4. **Constraints**:
+   - For each row, the sequence of shaded cells must match the row's block constraints. This is enforced using the `regular` constraint with a DFA that models the regular expression for the block sequence.
+   - Similarly for each column.
+   - The DFA for a block sequence `[b1, b2, ..., bk]` is designed to accept the pattern: zero or more unshaded, then `b1` shaded, then one or more unshaded, then `b2` shaded, and so on, ending with zero or more unshaded. The DFA includes states for gaps and blocks, with a sink state for invalid transitions.
 
-5. **Automaton Design for Clues**:
-   - For a clue with `k` blocks and lengths `L`:
-     - If `k = 0` (no shaded cells), the automaton has one state that only accepts sequences of all `false`.
-     - If `k > 0`, the automaton has `Q = sum(L) + k + 1` states, including an initial state, states for counting shaded cells in each block, and gap states for separators. Transitions are defined to ensure blocks of consecutive `true` values of specified lengths, separated by `false` values.
-   - The sequence values are mapped to integers: `false` → 1, `true` → 2 (since `regular` requires symbols 1..S).
+5. **Objective Function**: This is a satisfaction problem, so no objective function is needed.
 
-6. **Parameters and Fixed Dimensions**: Since MiniZinc requires fixed array sizes, we assume maximum numbers of blocks per row and column are provided. Clues are given as 2D arrays with padding for rows with fewer blocks.
+6. **Modeling Choices**:
+   - Use the `regular` constraint for its ability to encode sequence constraints via DFAs.
+   - Map grid cells to integers: `1` for unshaded (`false`) and `2` for shaded (`true`).
+   - Compute DFA parameters for each row and column based on their block lists, including state count `Q`, alphabet size `S=2`, transition matrix `d`, initial state `q0=1`, and accepting states `F`.
+   - Handle empty block lists (all unshaded) naturally within the DFA.
 
-7. **Implementation Details**:
-   - Compute the maximum number of states `M_r` and `M_c` for rows and columns to define fixed-size transition matrices.
-   - For each row and column, compute its actual automaton parameters (number of states, transition matrix, final states) based on its clue.
-   - Apply the `regular` constraint to each row and column sequence using their respective automata.
+7. **Simplifications**: The DFA construction ensures that all valid sequences are accepted, and invalid sequences lead to a non-accepting sink state.
 
-**MiniZinc Model:**
+### MiniZinc Model
 
 ```minizinc
-% Nonogram Solver
-% Parameters: grid dimensions and clues
-int: rows;
-int: cols;
-int: max_row_blk; % Maximum number of blocks per row
-int: max_col_blk; % Maximum number of blocks per column
-array[1..rows] of int: row_blk_count; % Number of blocks for each row
-array[1..rows, 1..max_row_blk] of int: row_clues; % Row clues (padded with 0 if needed)
-array[1..cols] of int: col_blk_count; % Number of blocks for each column
-array[1..cols, 1..max_col_blk] of int: col_clues; % Column clues (padded with 0 if needed)
+% Nonogram Puzzle Model
+% Parameters: grid dimensions and block constraints for rows and columns
 
-% Decision variables: grid of cells
-array[1..rows, 1..cols] of var bool: grid;
+int: R; % Number of rows
+int: C; % Number of columns
+array[1..R] of list of int: row_blocks; % Block sequences for each row
+array[1..C] of list of int: col_blocks; % Block sequences for each column
 
-% Compute maximum number of states for rows and columns
-int: M_r = max(
-    [if row_blk_count[i] == 0 then 1 
-     else sum(j in 1..row_blk_count[i]) (row_clues[i,j]) + row_blk_count[i] + 1 
-     endif | i in 1..rows]
-);
-int: M_c = max(
-    [if col_blk_count[j] == 0 then 1 
-     else sum(k in 1..col_blk_count[j]) (col_clues[j,k]) + col_blk_count[j] + 1 
-     endif | j in 1..cols]
-);
+% Decision variables: grid of booleans (true = shaded, false = unshaded)
+array[1..R, 1..C] of var bool: grid;
 
-% Constraint for each row
-constraint forall(i in 1..rows) (
+% Constraints for each row
+constraint forall(i in 1..R) (
     let {
-        % Get the clue for row i
-        int: k = row_blk_count[i],
-        % Compute actual number of states for this row
-        int: actual_Q = if k == 0 then 1 
-                       else sum(j in 1..k) (row_clues[i,j]) + k + 1 
-                       endif,
-        % Define transition matrix d for this row (size M_r x 2)
-        array[1..M_r, 1..2] of int: d = 
-            if k == 0 then
-                % Automaton for no blocks: only state 1
-                array2d(1..M_r, 1..2, 
-                    [if q == 1 then (if s == 1 then 1 else 0 endif) else 0 endif 
-                    | q in 1..M_r, s in 1..2])
-            else
-                % Automaton for k blocks
-                array2d(1..M_r, 1..2, 
-                    [let {
-                        % State definitions
-                        int: start_1 = 2,
-                        % Function to compute start_m for block m
-                        function int: start_block(int: m) = 
-                            1 + sum(j in 1..m-1) (row_clues[i,j]) + m,
-                        function int: end_block(int: m) = 
-                            start_block(m) + row_clues[i,m] - 1,
-                        function int: gap_state(int: m) = 
-                            end_block(m) + 1
-                    } in
-                    if q == 1 then
-                        % Initial state
-                        if s == 1 then 1 else 2 endif
+        list of int: L = row_blocks[i],
+        int: k = length(L),
+        int: total_sum = sum(L), % Cumulative sum for k blocks
+        % Compute cumulative sums for indices 0..k
+        array[0..k] of int: cumul = [0] ++ [sum([L[j] | j in 1..i]) | i in 1..k],
+        int: Q = 2 + k + total_sum, % Number of states including sink
+        % Initialize transition matrix with sink state Q
+        array[1..Q, 1..2] of int: d = array2d(1..Q, 1..2, [Q | _ in 1..2*Q]),
+        % Sequence for the row: 1 for unshaded, 2 for shaded
+        array[1..C] of var int: row_seq = [ if grid[i,j] then 2 else 1 endif | j in 1..C ]
+    } in
+    if k == 0 then
+        % If no blocks, all cells must be unshaded (handled by DFA, but explicit for clarity)
+        constraint forall(j in 1..C) (not grid[i,j])
+    else
+        % Build DFA transition matrix
+        % Define gap states g_i for i=0..k
+        forall(i in 0..k) (
+            let {
+                int: s_g = 1 + i + cumul[i] % State for g_i
+            } in (
+                d[s_g, 1] = s_g, % On unshaded (1), stay in g_i
+                if i < k then
+                    d[s_g, 2] = 1 + (i+1) + cumul[i] % On shaded (2), go to start of next block
+                else
+                    d[s_g, 2] = Q % On shaded after last block, go to sink
+                endif
+            )
+        )
+        /\
+        % Define block states for each block i and position j
+        forall(i in 1..k) (
+            let {
+                int: start_i = 1 + i + cumul[i-1] % Start state for block i
+            } in
+            forall(j in 1..L[i]) (
+                let {
+                    int: s = start_i + j - 1 % State for b_i_j
+                } in (
+                    % On unshaded (1)
+                    if j == L[i] then
+                        d[s, 1] = 1 + i + cumul[i] % Go to g_i after completing block
                     else
-                        % Check if q is in any block or gap
-                        if q <= actual_Q then
-                            % Check for block states
-                            forall(m in 1..k) (
-                                if q >= start_block(m) /\ q <= end_block(m) then
-                                    % In block m
-                                    if q < end_block(m) then
-                                        if s == 2 then q+1 else 0 endif
-                                    else
-                                        if s == 1 then gap_state(m) else 0 endif
-                                    endif
-                                else
-                                    false
-                                endif
-                            ) 
-                            \/ 
-                            % Check for gap states
-                            forall(m in 1..k) (
-                                if q == gap_state(m) then
-                                    if m < k then
-                                        if s == 1 then q else start_block(m+1) endif
-                                    else
-                                        if s == 1 then q else 0 endif
-                                    endif
-                                else
-                                    false
-                                endif
-                            )
-                        else
-                            % States beyond actual_Q: no transitions
-                            0
-                        endif
-                    endif | q in 1..M_r, s in 1..2]
+                        d[s, 1] = Q % Invalid, go to sink
+                    endif
+                    /\
+                    % On shaded (2)
+                    if j < L[i] then
+                        d[s, 2] = s + 1 % Go to next state in block
+                    else
+                        d[s, 2] = Q % Invalid, go to sink
+                    endif
                 )
-            endif,
-        % Final state(s)
-        set of int: F = {actual_Q}
-    in
-    regular([bool2int(grid[i,j]) + 1 | j in 1..cols], M_r, 2, d, 1, F)
+            )
+        )
+        /\
+        % Apply regular constraint for the row
+        regular(row_seq, Q, 2, d, 1, {1 + k + total_sum})
+    endif
 );
 
-% Constraint for each column
-constraint forall(j in 1..cols) (
+% Constraints for each column
+constraint forall(j in 1..C) (
     let {
-        % Get the clue for column j
-        int: k = col_blk_count[j],
-        % Compute actual number of states for this column
-        int: actual_Q = if k == 0 then 1 
-                       else sum(kk in 1..k) (col_clues[j,kk]) + k + 1 
-                       endif,
-        % Define transition matrix d for this column (size M_c x 2)
-        array[1..M_c, 1..2] of int: d = 
-            if k == 0 then
-                % Automaton for no blocks: only state 1
-                array2d(1..M_c, 1..2, 
-                    [if q == 1 then (if s == 1 then 1 else 0 endif) else 0 endif 
-                    | q in 1..M_c, s in 1..2])
-            else
-                % Automaton for k blocks
-                array2d(1..M_c, 1..2, 
-                    [let {
-                        % State definitions
-                        int: start_1 = 2,
-                        % Function to compute start_m for block m
-                        function int: start_block(int: m) = 
-                            1 + sum(kk in 1..m-1) (col_clues[j,kk]) + m,
-                        function int: end_block(int: m) = 
-                            start_block(m) + col_clues[j,m] - 1,
-                        function int: gap_state(int: m) = 
-                            end_block(m) + 1
-                    } in
-                    if q == 1 then
-                        % Initial state
-                        if s == 1 then 1 else 2 endif
+        list of int: L = col_blocks[j],
+        int: k = length(L),
+        int: total_sum = sum(L),
+        array[0..k] of int: cumul = [0] ++ [sum([L[i] | i in 1..i]) | i in 1..k],
+        int: Q = 2 + k + total_sum,
+        array[1..Q, 1..2] of int: d = array2d(1..Q, 1..2, [Q | _ in 1..2*Q]),
+        array[1..R] of var int: col_seq = [ if grid[i,j] then 2 else 1 endif | i in 1..R ]
+    } in
+    if k == 0 then
+        constraint forall(i in 1..R) (not grid[i,j])
+    else
+        forall(i in 0..k) (
+            let {
+                int: s_g = 1 + i + cumul[i]
+            } in (
+                d[s_g, 1] = s_g,
+                if i < k then
+                    d[s_g, 2] = 1 + (i+1) + cumul[i]
+                else
+                    d[s_g, 2] = Q
+                endif
+            )
+        )
+        /\
+        forall(i in 1..k) (
+            let {
+                int: start_i = 1 + i + cumul[i-1]
+            } in
+            forall(j in 1..L[i]) (
+                let {
+                    int: s = start_i + j - 1
+                } in (
+                    if j == L[i] then
+                        d[s, 1] = 1 + i + cumul[i]
                     else
-                        % Check if q is in any block or gap
-                        if q <= actual_Q then
-                            % Check for block states
-                            forall(m in 1..k) (
-                                if q >= start_block(m) /\ q <= end_block(m) then
-                                    % In block m
-                                    if q < end_block(m) then
-                                        if s == 2 then q+1 else 0 endif
-                                    else
-                                        if s == 1 then gap_state(m) else 0 endif
-                                    endif
-                                else
-                                    false
-                                endif
-                            ) 
-                            \/ 
-                            % Check for gap states
-                            forall(m in 1..k) (
-                                if q == gap_state(m) then
-                                    if m < k then
-                                        if s == 1 then q else start_block(m+1) endif
-                                    else
-                                        if s == 1 then q else 0 endif
-                                    endif
-                                else
-                                    false
-                                endif
-                            )
-                        else
-                            % States beyond actual_Q: no transitions
-                            0
-                        endif
-                    endif | q in 1..M_c, s in 1..2]
+                        d[s, 1] = Q
+                    endif
+                    /\
+                    if j < L[i] then
+                        d[s, 2] = s + 1
+                    else
+                        d[s, 2] = Q
+                    endif
                 )
-            endif,
-        % Final state(s)
-        set of int: F = {actual_Q}
-    in
-    regular([bool2int(grid[i,j]) + 1 | i in 1..rows], M_c, 2, d, 1, F)
+            )
+        )
+        /\
+        regular(col_seq, Q, 2, d, 1, {1 + k + total_sum})
+    endif
 );
 
-% Solve satisfy: find any valid shading
+% Solve statement: satisfy the constraints
 solve satisfy;
 
-% Output the grid (optional)
-output [if fix(grid[i,j]) then "X" else " " endif | i in 1..rows, j in 1..cols];
+% Output: display the grid with '#' for shaded and '.' for unshaded
+output [ if fix(grid[i,j]) then "#" else "." endif ++ if j == C then "\n" else "" endif | i in 1..R, j in 1..C ];
 ```
 
-**Note:** This model assumes that the clues are provided with padding for rows/columns with fewer blocks. The transition matrices are computed for each row and column based on their clues, using the maximum state counts `M_r` and `M_c` to ensure fixed dimensions. The output displays the grid with "X" for shaded cells and spaces for unshaded cells.
+This model defines the constraints for each row and column using the `regular` constraint with dynamically computed DFAs based on the block sequences. The output formats the grid for easy visualization.

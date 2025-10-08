@@ -1,13 +1,26 @@
 Reasoning:
-1. The decision variables are the positions of the marks on the ruler, represented as an array `a` of size `m`. The domain of each variable is the set of integers from 0 to `m*(m-1)/2`, which is the maximum possible length of the ruler.
-2. The first mark is always at position 0, so `a[1]` is fixed at 0.
-3. The marks must be in increasing order, so for each `i` from 2 to `m`, `a[i] > a[i-1]`.
-4. The differences between all pairs of marks must be distinct. This can be represented as an array `diff` of size `m*(m-1)/2`, where `diff[k]` is the difference between the `i`-th and `j`-th mark for some `i` and `j`. The domain of each `diff` variable is the set of integers from 1 to `m*(m-1)/2`.
-5. The first difference `a[2] - a[1]` must be less than the last difference `a[m] - a[m-1]`.
-6. The objective is to minimize the length of the ruler, which is `a[m]`.
-7. This is an optimization problem.
+
+1. Decision Variables:
+   - The decision variables are the positions of the marks on the ruler, represented as an array `a` of size `m`. Each element `a[i]` represents the position of the `i`th mark on the ruler.
+
+2. Domains:
+   - The domain of each `a[i]` is from `0` to `m*(m-1)/2`, as the maximum possible length of the ruler is `m*(m-1)/2`.
+
+3. Constraints:
+   - The first mark is at position `0`, i.e., `a[1] = 0`.
+   - The marks are in increasing order, i.e., `a[i] < a[j]` for all `1 <= i < j <= m`.
+   - All differences `a[j] - a[i]` are distinct for all `1 <= i < j <= m`. This can be represented as a boolean matrix `diff`, where `diff[i,j]` is `true` if `a[j] - a[i]` is a valid difference, and `false` otherwise. The constraint is that all `diff[i,j]` are `true`.
+   - The first difference is less than the last, i.e., `a[2] - a[1] < a[m] - a[m-1]`.
+
+4. Objective Function:
+   - The objective is to minimize the length of the ruler, which is `a[m]`.
+
+5. Simplifications or Modeling Choices:
+   - The problem can be simplified by removing the symmetry, i.e., by adding the constraint that the first difference is less than the last.
+   - The problem can be modeled as a constraint satisfaction problem with an objective function.
 
 MiniZinc model:
+
 ```minizinc
 % Number of marks
 int: m;
@@ -15,25 +28,36 @@ int: m;
 % Positions of the marks
 array[1..m] of var 0..m*(m-1)/2: a;
 
-% Differences between all pairs of marks
-array[1..m*(m-1)/2] of var 1..m*(m-1)/2: diff;
+% Differences between the marks
+array[1..m, 1..m] of var bool: diff;
 
 % The first mark is at position 0
 constraint a[1] = 0;
 
 % The marks are in increasing order
-constraint forall(i in 2..m) (a[i] > a[i-1]);
+constraint forall(i in 1..m-1) (
+  a[i] < a[i+1]
+);
 
-% The differences are distinct
-constraint alldifferent(diff);
-
-% The differences are correct
-constraint forall(i in 1..m, j in i+1..m) (diff[(i-1)*(m-i/2)+j-i] = a[j] - a[i]);
+% All differences are distinct
+constraint forall(i in 1..m, j in i+1..m) (
+  diff[i,j] = (forall(k in 1..m, l in k+1..m) (
+    if i != k \/ j != l then
+      a[j] - a[i] != a[l] - a[k]
+    else
+      true
+    endif
+  ))
+);
 
 % The first difference is less than the last
 constraint a[2] - a[1] < a[m] - a[m-1];
 
 % Minimize the length of the ruler
 solve minimize a[m];
+
+% Output the positions of the marks
+output [ show(a[i]) ++ " " | i in 1..m ];
 ```
-This model assumes that the number of marks `m` is given as input. The positions of the marks and the differences between them are decision variables. The constraints ensure that the marks are in increasing order, the differences are distinct and correct, and the first difference is less than the last. The objective is to minimize the length of the ruler.
+
+This model finds the positions of the marks on a Golomb ruler with `m` marks that minimizes the length of the ruler. The positions are output in increasing order.

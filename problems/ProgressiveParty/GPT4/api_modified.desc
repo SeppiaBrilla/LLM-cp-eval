@@ -1,64 +1,60 @@
 Reasoning:
 
 1. Decision Variables:
-   - The assignment of visitor groups to host rooms in each time slot. This can be represented as a 3D array `schedule[visitor, host, slot]` where `visitor` is the visitor group, `host` is the host room, and `slot` is the time slot. The value of `schedule[visitor, host, slot]` is 1 if the visitor group is assigned to the host room in the given time slot, and 0 otherwise.
+   - The decision variables are the assignments of visitor groups to host rooms in each time slot. This can be represented as a 3-dimensional array `schedule[time_slot, visitor_group, host_room]` where each element is a binary variable that is 1 if the visitor group is assigned to the host room in the given time slot, and 0 otherwise.
 
 2. Domains:
-   - The domain of `schedule[visitor, host, slot]` is {0, 1}.
+   - The domain of the decision variables is {0,1}. The number of time slots is equal to the maximum number of hosts in any room. The number of visitor groups is equal to the total number of hosts across all rooms. The number of host rooms is given by the problem.
 
 3. Constraints:
    - Each visitor group must be assigned to exactly one host room in each time slot.
-   - The total number of people in a host room in each time slot cannot exceed the room's capacity.
+   - Each host room can accommodate at most one visitor group in each time slot.
+   - The total number of people in a session (the size of the visitor group plus the size of the host group) cannot exceed the room's capacity.
    - A visitor group cannot attend the same host room twice.
    - Two visitor groups should not meet more than once across the fair.
-   - The number of hosts in a room should not exceed the number of slots.
 
 4. Objective Function:
-   - The objective is to maximize the number of free rooms remained. This can be achieved by minimizing the number of rooms used.
+   - The objective is to maximize the number of free rooms remained. This can be calculated as the total number of rooms minus the number of rooms used in each time slot.
 
 5. Simplifications or Modeling Choices:
-   - We can assume that the number of visitor groups is equal to the number of host rooms. This simplifies the problem and makes it more tractable.
+   - We can assume that the number of hosts in a room is fixed and does not change over time.
+   - We can also assume that the size of a visitor group is equal to the number of hosts in the room they are visiting. This simplifies the problem by ensuring that the room capacity constraint is always satisfied.
 
 MiniZinc model:
 
 ```minizinc
-% Number of visitor groups, host rooms, and time slots
-int: n_visitors; int: n_hosts; int: n_slots;
+% Parameters
+int: n_rooms = 42; % number of rooms
+int: n_slots = 7; % number of time slots
+set of int: ROOM = 1..n_rooms;
+set of int: SLOT = 1..n_slots;
+array[ROOM] of int: capacity = [6,8,12,12,12,12,12,10,10,10,10,10,8,8,8,12,8,8,8,8,8,8,7,7,7,7,7,7,6,6,6,6,6,6,6,6,6,6,9,0,0,0]; % room capacities
+array[ROOM] of int: hosts = [2,2,2,2,4,4,4,1,2,2,2,3,4,2,3,6,2,2,4,2,4,5,4,4,2,2,4,5,2,4,2,2,2,2,2,2,4,5,7,2,3,4]; % number of hosts in each room
+int: n_groups = sum(hosts); % number of visitor groups
+set of int: GROUP = 1..n_groups;
 
-% Room capacities and number of hosts
-array[1..n_hosts] of int: capacities; array[1..n_hosts] of int: hosts;
+% Decision variables
+array[SLOT, GROUP, ROOM] of var 0..1: schedule;
 
-% Decision variable: schedule[visitor, host, slot]
-array[1..n_visitors, 1..n_hosts, 1..n_slots] of var 0..1: schedule;
-
+% Constraints
 % Each visitor group must be assigned to exactly one host room in each time slot
-constraint forall(v in 1..n_visitors, s in 1..n_slots) (
-  sum(h in 1..n_hosts) (schedule[v, h, s]) = 1
-);
+constraint forall(s in SLOT, g in GROUP)(sum(r in ROOM)(schedule[s,g,r]) = 1);
 
-% The total number of people in a host room in each time slot cannot exceed the room's capacity
-constraint forall(h in 1..n_hosts, s in 1..n_slots) (
-  sum(v in 1..n_visitors) (schedule[v, h, s]) <= capacities[h]
-);
+% Each host room can accommodate at most one visitor group in each time slot
+constraint forall(s in SLOT, r in ROOM)(sum(g in GROUP)(schedule[s,g,r]) <= 1);
 
 % A visitor group cannot attend the same host room twice
-constraint forall(v in 1..n_visitors, h in 1..n_hosts) (
-  sum(s in 1..n_slots) (schedule[v, h, s]) <= 1
-);
+constraint forall(g in GROUP, r in ROOM)(sum(s in SLOT)(schedule[s,g,r]) <= 1);
 
 % Two visitor groups should not meet more than once across the fair
-constraint forall(v1 in 1..n_visitors, v2 in v1+1..n_visitors) (
-  sum(h in 1..n_hosts, s in 1..n_slots) (schedule[v1, h, s] * schedule[v2, h, s]) <= 1
-);
+constraint forall(g1 in GROUP, g2 in GROUP where g1 < g2)(sum(s in SLOT, r in ROOM)(schedule[s,g1,r] * schedule[s,g2,r]) <= 1);
 
-% The number of hosts in a room should not exceed the number of slots
-constraint forall(h in 1..n_hosts) (
-  sum(s in 1..n_slots) (sum(v in 1..n_visitors) (schedule[v, h, s])) <= hosts[h]
-);
+% Objective function
+var int: n_free_rooms = sum(s in SLOT)(n_rooms - sum(r in ROOM)(max(g in GROUP)(schedule[s,g,r])));
+solve maximize n_free_rooms;
 
-% Objective: minimize the number of rooms used
-var int: rooms_used = sum(h in 1..n_hosts, s in 1..n_slots) (bool2int(sum(v in 1..n_visitors) (schedule[v, h, s]) > 0));
-solve minimize rooms_used;
+% Output
+output [ if fix(schedule[s,g,r]) = 1 then "Group " ++ show(g) ++ " visits Room " ++ show(r) ++ " in Slot " ++ show(s) ++ "\n" else "" endif | s in SLOT, g in GROUP, r in ROOM ];
 ```
 
-Note: This model assumes that the number of visitor groups is equal to the number of host rooms. If this is not the case, the model needs to be adjusted accordingly.
+This model assumes that the number of hosts in a room is fixed and does not change over time. It also assumes that the size of a visitor group is equal to the number of hosts in the room they are visiting. This simplifies the problem by ensuring that the room capacity constraint is always satisfied. The model also includes constraints to ensure that each visitor group is assigned to exactly one host room in each time slot, that each host room can accommodate at most one visitor group in each time slot, that a visitor group cannot attend the same host room twice, and that two visitor groups should not meet more than once across the fair. The objective is to maximize the number of free rooms remained.

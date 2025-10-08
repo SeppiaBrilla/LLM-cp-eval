@@ -1,130 +1,130 @@
 **Reasoning:**
 
-1. **Decision Variables**: We need to determine which square zones to place in the park and their positions. Each zone is characterized by its size (side length) and position (top-left corner coordinates).
+1. **Decision Variables**: We need to determine which square zones to place in the park and where to place them. Each zone is characterized by its size (side length) and position.
 
-2. **Domain Analysis**: 
-   - Let the park have side length N (to be determined or given as parameter)
-   - Zone sizes: positive integers from 1 to N
-   - Zone positions: coordinates (x,y) where zones can be placed within the park boundaries
+2. **Problem Structure**: This is a square packing problem with additional constraints. We have a square park of some size N×N that needs to be completely filled with non-overlapping square zones of different integer sizes.
 
 3. **Key Constraints**:
-   - **No overlap**: Zones cannot overlap with each other
-   - **Within boundaries**: All zones must fit completely within the park
-   - **Distinct sizes**: Each zone must have a different side length
-   - **Complete coverage**: The entire park area must be covered (minimize unused area)
-   - **No rectangular arrangements**: No group of zones can form a rectangular block together
+   - All zones must be squares with integer side lengths
+   - All zones must have different sizes (distinct sizes)
+   - Zones cannot overlap
+   - Zones must be aligned with park boundaries
+   - The entire park must be covered (no unused area)
+   - No group of zones can form a rectangular block together
 
-4. **Modeling Approach**:
-   - Use a grid-based approach where each cell of the park is assigned to exactly one zone
-   - Each zone is identified by its unique size
-   - Track which zone occupies each cell of the park
-   - The "no rectangular block" constraint is the most complex - we need to ensure that no subset of zones can be arranged to form a rectangle
+4. **Variables Needed**:
+   - Park size N (parameter)
+   - Set of zone sizes to use
+   - Position coordinates for each zone
+   - Binary variables to track which cells are occupied by which zones
 
-5. **Objective**: This is primarily a satisfaction problem (complete coverage), but we could minimize unused area if partial coverage is allowed.
+5. **Modeling Approach**:
+   - Use a grid-based approach where each cell (i,j) in the N×N park can be assigned to a zone
+   - Each zone k has a size s[k] and top-left position (x[k], y[k])
+   - The "no rectangular block" constraint is complex - it means no subset of zones can be arranged to form a rectangle when considered together
 
-6. **Simplification**: For the rectangular block constraint, we can check that for any rectangular region, it's not completely filled by a connected group of zones.
+6. **Objective**: This appears to be a constraint satisfaction problem (complete coverage required) rather than optimization, though we could minimize the number of zones used.
 
-**MiniZinc Model:**
+**MiniZinc model:**
 
 ```minizinc
-% Square Park Zone Planning
+% Square Park Zone Design Problem
+% Pack distinct square zones into a square park with no rectangular groupings
+
+include "globals.mzn";
+
 % Parameters
-int: N; % Side length of the square park
-set of int: SIZES = 1..N; % Possible zone sizes
-set of int: COORDS = 1..N; % Coordinate range
+int: N; % Size of the square park (N x N)
+int: max_zones = N; % Maximum number of zones we might need
 
 % Decision variables
-% For each possible zone size, decide if it's used and where it's placed
-array[SIZES] of var bool: used; % Whether each size is used
-array[SIZES] of var COORDS: zone_x; % X coordinate of top-left corner
-array[SIZES] of var COORDS: zone_y; % Y coordinate of top-left corner
+array[1..max_zones] of var 0..N: size;     % Size of each zone (0 means zone not used)
+array[1..max_zones] of var 1..N: x;       % X coordinate of top-left corner
+array[1..max_zones] of var 1..N: y;       % Y coordinate of top-left corner
+array[1..max_zones] of var bool: used;    % Whether zone is used
 
-% Grid assignment: each cell is assigned to a zone (identified by its size)
-array[COORDS, COORDS] of var 0..N: grid; % 0 means unused, otherwise zone size
+% Grid to track which zone occupies each cell
+array[1..N, 1..N] of var 1..max_zones: grid;
 
-% Constraint: If a zone size is used, it must be placed within boundaries
-constraint forall(s in SIZES) (
-  used[s] -> (zone_x[s] + s - 1 <= N /\ zone_y[s] + s - 1 <= N)
+% Constraint: Link used zones with their sizes
+constraint forall(k in 1..max_zones)(
+    used[k] <-> size[k] > 0
 );
 
-% Constraint: If a zone is used, fill the corresponding grid cells
-constraint forall(s in SIZES) (
-  used[s] -> forall(i in 0..s-1, j in 0..s-1) (
-    grid[zone_x[s] + i, zone_y[s] + j] = s
-  )
+% Constraint: All used zones must have distinct sizes
+constraint forall(i, j in 1..max_zones where i < j)(
+    used[i] /\ used[j] -> size[i] != size[j]
 );
 
-% Constraint: If a zone is not used, it shouldn't appear in the grid
-constraint forall(s in SIZES) (
-  not used[s] -> forall(i in COORDS, j in COORDS) (
-    grid[i, j] != s
-  )
+% Constraint: Zones must fit within park boundaries
+constraint forall(k in 1..max_zones)(
+    used[k] -> (x[k] + size[k] - 1 <= N /\ y[k] + size[k] - 1 <= N)
 );
 
-% Constraint: Each cell belongs to at most one zone
-constraint forall(i in COORDS, j in COORDS) (
-  sum(s in SIZES where used[s] /\ 
-      zone_x[s] <= i /\ i <= zone_x[s] + s - 1 /\
-      zone_y[s] <= j /\ j <= zone_y[s] + s - 1) (1) <= 1
+% Constraint: Each cell belongs to exactly one zone
+constraint forall(i, j in 1..N)(
+    exists(k in 1..max_zones)(
+        used[k] /\ 
+        x[k] <= i /\ i <= x[k] + size[k] - 1 /\
+        y[k] <= j /\ j <= y[k] + size[k] - 1 /\
+        grid[i,j] = k
+    )
 );
 
-% Constraint: Complete coverage (every cell must be assigned to some zone)
-constraint forall(i in COORDS, j in COORDS) (
-  grid[i, j] > 0
+% Constraint: Grid assignment consistency
+constraint forall(i, j in 1..N, k in 1..max_zones)(
+    grid[i,j] = k -> (
+        used[k] /\
+        x[k] <= i /\ i <= x[k] + size[k] - 1 /\
+        y[k] <= j /\ j <= y[k] + size[k] - 1
+    )
 );
-
-% Constraint: All used zones have distinct sizes (automatically satisfied by design)
-% This is implicit since each size can only be used once
 
 % Constraint: No rectangular blocks formed by multiple zones
-% Check that no rectangular region is completely filled by a connected group of zones
-constraint forall(x1, y1, x2, y2 in COORDS where x1 <= x2 /\ y1 <= y2 /\ 
-                  (x2 - x1 + 1) * (y2 - y1 + 1) > 1) (
-  % If this rectangle spans multiple zones, ensure it's not a valid rectangular block
-  let {
-    set of int: zones_in_rect = {grid[i, j] | i in x1..x2, j in y1..y2}
-  } in (
-    % If rectangle contains multiple different zones, check it's not forming a block
+% This prevents any rectangular region from being formed by 2 or more zones
+constraint forall(r1, c1, r2, c2 in 1..N where r1 <= r2 /\ c1 <= c2 /\ (r2-r1+1)*(c2-c1+1) > 1)(
+    let {
+        set of int: zones_in_rect = {grid[i,j] | i in r1..r2, j in c1..c2}
+    } in
+    % If the rectangle contains cells from multiple zones, 
+    % then it cannot form a perfect rectangle (must have "gaps" or irregular boundaries)
     card(zones_in_rect) > 1 -> 
-      exists(i in x1..x2, j in y1..y2) (
-        % There must be some "irregularity" - adjacent cells with different zones
-        % that break the rectangular pattern
-        (i < x2 /\ grid[i, j] != grid[i+1, j]) \/
-        (j < y2 /\ grid[i, j] != grid[i, j+1])
-      )
-  )
+        exists(i in r1..r2, j in c1..c2)(
+            % At least one cell in the rectangle must be adjacent to a cell from a different zone
+            % or be at the boundary of its zone within this rectangle
+            exists(di, dj in {-1, 0, 1} where abs(di) + abs(dj) = 1)(
+                let {
+                    int: ni = i + di,
+                    int: nj = j + dj
+                } in
+                (ni >= r1 /\ ni <= r2 /\ nj >= c1 /\ nj <= c2) ->
+                grid[i,j] != grid[ni,nj]
+            )
+        )
 );
 
-% Alternative formulation for the rectangular block constraint:
-% Ensure that any rectangular region that could be formed by multiple zones
-% has at least one "notch" or irregularity
-constraint forall(x1, y1, x2, y2 in COORDS where 
-                  x1 < x2 /\ y1 < y2) (
-  % Count distinct zones in this rectangle
-  let {
-    array[int] of int: zones_list = [grid[i, j] | i in x1..x2, j in y1..y2];
-    set of int: unique_zones = array2set(zones_list);
-  } in (
-    card(unique_zones) > 1 -> 
-      % If multiple zones, ensure the boundary between zones creates irregularity
-      exists(i in x1..x2-1, j in y1..y2-1) (
-        grid[i, j] != grid[i+1, j] \/ grid[i, j] != grid[i, j+1]
-      )
-  )
-);
-
-% Solve for satisfaction
-solve satisfy;
+% Objective: Minimize number of zones (optional)
+var int: num_zones = sum(k in 1..max_zones)(used[k]);
+solve minimize num_zones;
 
 % Output
 output [
-  "Park layout (zone sizes):\n"
+    "Park size: \(N)x\(N)\n",
+    "Number of zones: \(num_zones)\n",
+    "Zone details:\n"
 ] ++
 [
-  show(grid[i, j]) ++ if j = N then "\n" else " " endif
-  | i in COORDS, j in COORDS
+    if used[k] then
+        "Zone \(k): size \(size[k])x\(size[k]) at position (\(x[k]),\(y[k]))\n"
+    else ""
+    endif
+    | k in 1..max_zones
 ] ++
+["\nPark layout:\n"] ++
 [
-  "\nUsed zones: " ++ show([s | s in SIZES where used[s]]) ++ "\n"
+    if j = 1 then "" else " " endif ++
+    show(grid[i,j]) ++
+    if j = N then "\n" else "" endif
+    | i in 1..N, j in 1..N
 ];
 ```

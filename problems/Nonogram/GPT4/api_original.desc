@@ -1,42 +1,50 @@
 Reasoning:
-1. The Nonogram grid is a square grid of size n x n. Each cell is a binary variable with domain 0..1, where 0 represents an unshaded cell and 1 represents a shaded cell.
-2. The constraints are given as sequences of integers for each row and column. These sequences represent the lengths of consecutive blocks of shaded cells in the corresponding row or column.
-3. Constraint: Each row and column must satisfy its given sequence of block lengths. This means that for each sequence, there must be a block of shaded cells of the corresponding length, separated by at least one unshaded cell.
-4. This is a satisfaction problem (no objective function).
+
+1. Decision Variables:
+   - The decision variables are the cells in the grid. Each cell can either be shaded (1) or not shaded (0).
+
+2. Domains:
+   - The domain of each cell is {0,1}.
+
+3. Constraints:
+   - The constraints are given by the sequences for each row and column. For each row and column, the sequence of shaded blocks must match the given sequence. 
+   - The sequences are separated by at least one unshaded cell.
+
+4. Objective Function:
+   - This is a satisfaction problem, so there is no objective function.
+
+5. Simplifications or Modeling Choices:
+   - We can use a 2D array to represent the grid. Each element of the array represents a cell in the grid.
+   - We can use a function to check if a sequence of shaded blocks in a row or column matches the given sequence. This function can be used to encode the constraints.
 
 MiniZinc model:
 ```minizinc
-% Nonogram solver
 include "globals.mzn";
 
-% Size of the grid
-int: n;
+% Define the size of the grid
+int: n; % number of rows
+int: m; % number of columns
 
-% Sequences for rows and columns
-array[1..n] of set of int: rowSeqs;
-array[1..n] of set of int: colSeqs;
+% Define the sequences for each row and column
+array[1..n] of set of int: row_sequences;
+array[1..m] of set of int: col_sequences;
 
-% Grid of cells
-array[1..n, 1..n] of var 0..1: grid;
+% Define the grid
+array[1..n, 1..m] of var 0..1: grid;
 
-% Function to check if a row or column satisfies its sequence
-function var bool: satisfiesSeq(array[int] of var int: cells, set of int: seq) =
+% Define a function to check if a sequence of shaded blocks matches the given sequence
+function var bool: check_sequence(array[int] of var int: sequence, set of int: given_sequence) =
   let {
-    % Convert cells to blocks
-    array[int] of var int: blocks = [ sum(i in lb..ub)(cells[i]) | lb, ub in index_sets(cells) where ub > lb /\ cells[lb] = 1 /\ (lb = index_set_min(cells) \/ cells[lb-1] = 0) /\ (ub = index_set_max(cells) \/ cells[ub+1] = 0) ];
+    % Count the number of consecutive shaded cells
+    array[int] of var int: counts = [ sum(i in index_set(sequence) where sequence[i] = 1) ];
+    % Check if the counts match the given sequence
+    constraint forall(i in index_set(given_sequence))(counts[i] = given_sequence[i]);
   } in
-  % Check if blocks match sequence
-  increasing(blocks) /\ blocks = seq;
+  true;
 
-% Constraints for rows and columns
-constraint forall(i in 1..n) (
-  satisfiesSeq([grid[i, j] | j in 1..n], rowSeqs[i])
-);
-constraint forall(j in 1..n) (
-  satisfiesSeq([grid[i, j] | i in 1..n], colSeqs[j])
-);
+% Encode the constraints
+constraint forall(i in 1..n)(check_sequence([grid[i,j] | j in 1..m], row_sequences[i]));
+constraint forall(j in 1..m)(check_sequence([grid[i,j] | i in 1..n], col_sequences[j]));
 
 solve satisfy;
 ```
-
-Note: This model assumes that the sequences for rows and columns are given as sets of integers, which means that the order of blocks is not considered. If the order of blocks is important, the sequences should be given as arrays of integers, and the `satisfiesSeq` function should be modified to check the order of blocks.

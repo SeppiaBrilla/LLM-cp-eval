@@ -1,89 +1,85 @@
 **Reasoning:**
 
-1. **Decision Variables**: We need to decide which scientists are in which teams in which weeks. Let's use a 3D binary array `x[w,t,s]` where `x[w,t,s] = 1` if scientist `s` is in team `t` during week `w`, and 0 otherwise.
+1. **Problem Analysis**: This is a combinatorial design problem where we need to partition 32 scientists into teams of 4 each week, ensuring no pair of scientists appears together more than once across all weeks.
 
-2. **Domains**: 
-   - Scientists: 1..32
-   - Teams per week: 1..8 (since 32 scientists ÷ 4 scientists per team = 8 teams)
-   - Weeks: 1..W (where W is the number of weeks we want to maximize)
+2. **Decision Variables**: 
+   - We need binary variables to represent whether scientist i is in team j in week k
+   - Alternatively, we can use variables to represent team assignments for each scientist in each week
 
-3. **Constraints**:
-   - Each team has exactly 4 scientists each week
-   - Each scientist is in exactly one team each week
-   - No two scientists can be in the same team more than once across all weeks
+3. **Key Constraints**:
+   - Each week, scientists must be divided into exactly 8 teams of 4 (since 32/4 = 8)
+   - Each scientist appears in exactly one team per week
+   - No pair of scientists can be in the same team more than once across all weeks
+   - We want to maximize the number of weeks
 
-4. **Objective**: Maximize the number of weeks W
+4. **Mathematical Insight**: This is related to a resolvable balanced incomplete block design (RBIBD). With 32 scientists in teams of 4, each scientist will meet 3 others each week. The maximum number of weeks is bounded by the fact that each scientist can meet at most 31 others, so theoretically we could have at most ⌊31/3⌋ = 10 weeks, but this may not be achievable due to the structure constraints.
 
-5. **Key insight**: This is a combinatorial design problem. The maximum number of weeks is bounded by the fact that each scientist can pair with at most 31 other scientists, and in each week they pair with 3 others. So theoretically, each scientist could participate in at most ⌊31/3⌋ = 10 weeks before running out of new teammates. However, the global constraint that no pair appears twice is more restrictive.
+5. **Modeling Approach**: 
+   - Use a 3D binary array: `team[scientist, team_num, week]` indicating if scientist s is in team t in week w
+   - Add constraints for team sizes, unique assignments, and pair restrictions
+   - Maximize the number of active weeks
 
-6. **Modeling choice**: Since we want to maximize weeks, we can either:
-   - Fix W and solve for satisfaction, then increase W until unsatisfiable
-   - Use an optimization model with W as the objective
-   
-   I'll use the optimization approach.
+6. **Objective**: Maximize the number of weeks in the schedule
 
 **MiniZinc model:**
 
 ```minizinc
-% Brainstorming session scheduler
-% Maximize weeks while ensuring no two scientists are teammates more than once
-
 % Parameters
 int: n_scientists = 32;
 int: team_size = 4;
-int: n_teams = n_scientists div team_size;  % 8 teams per week
+int: teams_per_week = n_scientists div team_size;  % 8 teams per week
 int: max_weeks = 15;  % Upper bound estimate
 
 % Decision variables
-var 1..max_weeks: weeks;  % Number of weeks to maximize
-array[1..max_weeks, 1..n_teams, 1..n_scientists] of var 0..1: x;
+% team[s,t,w] = 1 if scientist s is in team t in week w
+array[1..n_scientists, 1..teams_per_week, 1..max_weeks] of var 0..1: team;
 
-% Each team has exactly team_size scientists each active week
-constraint forall(w in 1..max_weeks, t in 1..n_teams) (
-    if w <= weeks then
-        sum(s in 1..n_scientists)(x[w,t,s]) = team_size
-    else
-        sum(s in 1..n_scientists)(x[w,t,s]) = 0
-    endif
-);
+% Number of active weeks (weeks that have at least one team formed)
+array[1..max_weeks] of var 0..1: week_active;
+var 0..max_weeks: num_weeks;
 
-% Each scientist is in exactly one team each active week
+% Constraints
+
+% Each scientist is in exactly one team per active week
 constraint forall(w in 1..max_weeks, s in 1..n_scientists) (
-    if w <= weeks then
-        sum(t in 1..n_teams)(x[w,t,s]) = 1
-    else
-        sum(t in 1..n_teams)(x[w,t,s]) = 0
-    endif
+    sum(t in 1..teams_per_week)(team[s,t,w]) = week_active[w]
 );
 
-% No two scientists can be teammates more than once
-constraint forall(s1, s2 in 1..n_scientists where s1 < s2) (
-    sum(w in 1..max_weeks, t in 1..n_teams)(
-        x[w,t,s1] * x[w,t,s2]
+% Each team in an active week has exactly team_size scientists
+constraint forall(w in 1..max_weeks, t in 1..teams_per_week) (
+    sum(s in 1..n_scientists)(team[s,t,w]) = team_size * week_active[w]
+);
+
+% No pair of scientists can be in the same team more than once
+constraint forall(s1 in 1..n_scientists, s2 in s1+1..n_scientists) (
+    sum(w in 1..max_weeks, t in 1..teams_per_week)(
+        team[s1,t,w] * team[s2,t,w]
     ) <= 1
 );
 
-% Symmetry breaking: order teams by their smallest member
-constraint forall(w in 1..max_weeks, t in 1..n_teams-1) (
-    min([s | s in 1..n_scientists where x[w,t,s] = 1] ++ [n_scientists+1]) <=
-    min([s | s in 1..n_scientists where x[w,t+1,s] = 1] ++ [n_scientists+1])
+% Week ordering: if week w is not active, then week w+1 cannot be active
+constraint forall(w in 1..max_weeks-1) (
+    week_active[w+1] <= week_active[w]
 );
 
-% Objective: maximize number of weeks
-solve maximize weeks;
+% Count total number of weeks
+constraint num_weeks = sum(w in 1..max_weeks)(week_active[w]);
 
-% Output formatting
+% Objective: maximize number of weeks
+solve maximize num_weeks;
+
+% Output
 output [
-    "Number of weeks: \(weeks)\n"
+    "Number of weeks: \(num_weeks)\n"
 ] ++
 [
     "Week \(w):\n" ++
     concat([
         "  Team \(t): " ++ 
-        concat([show(s) ++ " " | s in 1..n_scientists where fix(x[w,t,s]) = 1]) ++ 
+        concat([show(s) ++ " " | s in 1..n_scientists where fix(team[s,t,w]) = 1]) ++ 
         "\n"
-        | t in 1..n_teams
+        | t in 1..teams_per_week where fix(week_active[w]) = 1
     ])
-    | w in 1..fix(weeks)
+    | w in 1..max_weeks where fix(week_active[w]) = 1
 ];
 ```

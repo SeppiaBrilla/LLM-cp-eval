@@ -1,74 +1,43 @@
 Reasoning:
 
-1. Decision Variables:
-    - `visits`: A 4-dimensional array of boolean variables, where `visits[s, o, p, w]` is true if shopper `s` visits outlet `o` to meet sales person `p` in week `w`.
-    - `outlet_areas`: A 2-dimensional array of boolean variables, where `outlet_areas[o, a]` is true if outlet `o` is in area `a`.
-    - `sales_people`: An array of integer variables, where `sales_people[o]` is the number of sales people in outlet `o`.
+1. **Decision Variables:**
+    - The main decision variable is a 3-dimensional array `visit` where `visit[i,j,k]` represents whether shopper `i` visits salesperson `j` in week `k`. This array will be of size `40x35x4` as there are 40 shoppers, 35 salespeople and 4 weeks.
+    - Another decision variable is a 2-dimensional array `outlet` where `outlet[i,j]` represents whether shopper `i` visits outlet `j`. This array will be of size `40x19` as there are 40 shoppers and 19 outlets.
 
-2. Domains:
-    - `s` (shopper): 1..40
-    - `o` (outlet): 1..19
-    - `p` (sales person): 1..4
-    - `w` (week): 1..4
-    - `a` (area): 1..4
+2. **Domains:**
+    - The domain of `visit` and `outlet` is binary i.e., {0,1}.
 
-3. Constraints:
-    - Each sales person must be visited by 4 different shoppers.
+3. **Constraints:**
+    - Each salesperson must be visited by 4 different shoppers.
     - Each shopper should only visit 1 outlet in each of the 4 areas.
-    - All sales people should be visited 2 times in the first 2 weeks of fieldwork.
-    - Shoppers making 4 visits must have done 2 visits by the end of the second week.
-    - Shoppers making 3 visits should have done 1 or 2 visits by the end of the second week.
+    - All salespeople should be visited 2 times in the first 2 weeks of fieldwork.
+    - In each group of shoppers, 5 shoppers will perform 3 visits and the other 5 shoppers will perform 4 visits.
+    - Shoppers making 4 visits must have done 2 visits by the end of the second week. Shoppers making 3 visits should have done 1 or 2 visits by the end of the second week.
 
-4. This is a satisfaction problem (no objective function).
+4. **Objective Function:**
+    - This is a satisfaction problem, so there is no objective function to optimize.
 
-5. Potential simplifications or modeling choices:
-    - We can assume that the number of sales people in each outlet is fixed and known in advance.
-    - We can also assume that the area of each outlet is fixed and known in advance.
+5. **Modeling Choices:**
+    - We can model the problem as a constraint satisfaction problem (CSP) where the goal is to find an assignment of shoppers to salespeople and outlets that satisfies all the constraints.
+    - We can use the global constraint `sum` to ensure that each salesperson is visited by 4 different shoppers and each shopper visits the correct number of salespeople.
+    - We can use the global constraint `alldifferent` to ensure that each shopper visits different outlets in each area.
+    - We can use the global constraint `count` to ensure that all salespeople are visited 2 times in the first 2 weeks of fieldwork.
+    - We can use the global constraint `cumulative` to ensure that the visits are spaced out roughly evenly over the 4 weeks.
 
 MiniZinc model:
 
 ```minizinc
-% Number of shoppers, outlets, sales people, weeks, and areas
-int: n_shoppers = 40;
-int: n_outlets = 19;
-int: n_sales_people = 4;
-int: n_weeks = 4;
-int: n_areas = 4;
+% Define the decision variables
+var 0..1: visit[1..40, 1..35, 1..4]; % visit[i,j,k] = 1 if shopper i visits salesperson j in week k
+var 0..1: outlet[1..40, 1..19]; % outlet[i,j] = 1 if shopper i visits outlet j
 
-% Decision variables
-array[1..n_shoppers, 1..n_outlets, 1..n_sales_people, 1..n_weeks] of var 0..1: visits;
-array[1..n_outlets, 1..n_areas] of var 0..1: outlet_areas;
-array[1..n_outlets] of var 1..n_sales_people: sales_people;
+% Define the constraints
+constraint forall(i in 1..40)(sum(j in 1..35, k in 1..4)(visit[i,j,k]) = if i mod 2 = 0 then 4 else 3 endif); % Each shopper visits the correct number of salespeople
+constraint forall(j in 1..35)(sum(i in 1..40, k in 1..4)(visit[i,j,k]) = 4); % Each salesperson is visited by 4 different shoppers
+constraint forall(i in 1..40)(sum(j in 1..5)(outlet[i,j]) = 1 /\ sum(j in 6..10)(outlet[i,j]) = 1 /\ sum(j in 11..15)(outlet[i,j]) = 1 /\ sum(j in 16..19)(outlet[i,j]) = 1); % Each shopper visits 1 outlet in each area
+constraint forall(j in 1..35)(sum(i in 1..40, k in 1..2)(visit[i,j,k]) = 2); % All salespeople are visited 2 times in the first 2 weeks
+constraint forall(i in 1..40)(if i mod 2 = 0 then sum(j in 1..35, k in 1..2)(visit[i,j,k]) = 2 else sum(j in 1..35, k in 1..2)(visit[i,j,k]) >= 1 /\ sum(j in 1..35, k in 1..2)(visit[i,j,k]) <= 2 endif); % Shoppers making 4 visits must have done 2 visits by the end of the second week. Shoppers making 3 visits should have done 1 or 2 visits by the end of the second week
 
-% Each sales person must be visited by 4 different shoppers
-constraint forall(o in 1..n_outlets, p in 1..sales_people[o]) (
-  sum(s in 1..n_shoppers, w in 1..n_weeks) (visits[s, o, p, w]) = 4
-);
-
-% Each shopper should only visit 1 outlet in each of the 4 areas
-constraint forall(s in 1..n_shoppers, a in 1..n_areas) (
-  sum(o in 1..n_outlets) (outlet_areas[o, a] * sum(p in 1..n_sales_people, w in 1..n_weeks) (visits[s, o, p, w])) = 1
-);
-
-% All sales people should be visited 2 times in the first 2 weeks of fieldwork
-constraint forall(o in 1..n_outlets, p in 1..sales_people[o]) (
-  sum(s in 1..n_shoppers, w in 1..2) (visits[s, o, p, w]) = 2
-);
-
-% Shoppers making 4 visits must have done 2 visits by the end of the second week
-constraint forall(s in 1..n_shoppers) (
-  (sum(o in 1..n_outlets, p in 1..n_sales_people, w in 1..n_weeks) (visits[s, o, p, w]) = 4) -> 
-  (sum(o in 1..n_outlets, p in 1..n_sales_people, w in 1..2) (visits[s, o, p, w]) = 2)
-);
-
-% Shoppers making 3 visits should have done 1 or 2 visits by the end of the second week
-constraint forall(s in 1..n_shoppers) (
-  (sum(o in 1..n_outlets, p in 1..n_sales_people, w in 1..n_weeks) (visits[s, o, p, w]) = 3) -> 
-  (sum(o in 1..n_outlets, p in 1..n_sales_people, w in 1..2) (visits[s, o, p, w]) >= 1 /\
-   sum(o in 1..n_outlets, p in 1..n_sales_people, w in 1..2) (visits[s, o, p, w]) <= 2)
-);
-
+% Solve the problem
 solve satisfy;
 ```
-
-Note: This model assumes that the number of sales people in each outlet and the area of each outlet are given as input. If these are not known in advance, they can be modeled as decision variables with appropriate constraints.
