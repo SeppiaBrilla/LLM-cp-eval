@@ -1,6 +1,6 @@
 {
     "original": {
-        "runs": true,
+        "runs": false,
         "globals": false,
         "correctProblem": true
     },

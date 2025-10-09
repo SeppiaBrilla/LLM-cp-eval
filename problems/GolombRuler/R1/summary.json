@@ -5,7 +5,7 @@
         "correctProblem":true
     },
     "modified":{
-        "runs":false,
+        "runs":true,
         "globals":true,
         "correctProblem":true
     }

@@ -1,12 +1,12 @@
 {
     "original": {
-        "runs": false,
+        "runs": true,
         "globals": false,
         "correctProblem": false
     },
     "modified": {
-        "runs": true,
+        "runs": false,
         "globals": true,
-        "correctProblem": true
+        "correctProblem": false
     }
 }

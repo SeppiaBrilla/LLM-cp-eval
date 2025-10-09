@@ -1,7 +1,7 @@
 {
     "original": {
-        "runs": true,
-        "globals": true,
+        "runs": false,
+        "globals": false,
         "correctProblem": true
     },
     "modified": {
