@@ -113,7 +113,6 @@ def main():
     with open("system_prompt.txt") as f:
         system_prompt = f.read()
     generate(system_prompt, llm_model)
-    
 
 if __name__ == "__main__":
     main()

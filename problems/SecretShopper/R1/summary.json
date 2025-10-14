@@ -8,5 +8,6 @@
         "runs": true,
         "globals": true,
         "correctProblem": false
-    }
+    },
+    "similar": false
 }

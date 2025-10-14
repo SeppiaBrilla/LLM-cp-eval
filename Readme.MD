@@ -12,6 +12,8 @@ By comparing LLM-generated solutions across original and rephrased problems, we 
 * How well LLMs perform modeling tasks independent of their exposure to standard formulations (reducing contamination effects).
 * How robust LLMs are to noise and less structured problem descriptions.
 
+Finally, to asses the level of data contamination we asked each LLM to complete each problem description. We then compare the completed problem description with the corresponding original to determine how close they are.
+
 ---
 
 # Repository Structure
@@ -19,6 +21,7 @@ By comparing LLM-generated solutions across original and rephrased problems, we 
 The repository is organized as follows:
 
 * **`generate.py`**: Python script to generate all models using a selected LLM (GPT-4, Claude-4, or DeepSeek-R1).
+* **`complete.py`**: Python script to complete the problems descriptions using a selected LLM (GPT-4, Claude-4, or DeepSeek-R1).
 * **`system_prompt.txt`**: The system prompt provided to all LLMs.
 * **`problems/`**: Directory containing problem descriptions and corresponding solutions.
 
@@ -39,7 +42,8 @@ Each problem in the `problems/` directory has its own subdirectory, structured a
 
   * **`api_original.desc`** – LLM’s response to the original problem description (including model and reasoning steps).
   * **`api_modified.desc`** – LLM’s response to the rephrased problem description (including model and reasoning steps).
-  * **`summary.json`** – Summary of results of the two models under the **`original`** and **`modified`** keys. Each having 3 boolean sub-keys: 
+  * **`problem_completion.txt`** – Original problem description completed by the LLM.
+  * **`summary.json`** – Summary of results of the two models. It contains a **`similar`** key that it is true if the generated problem completion is similar to the original from CSPlib, false otherwise. Then, under the **`original`** and **`modified`** keys, there are 3 boolean sub-keys: 
     * **`runs`**: if the models runs and it solves the problem correctly, e.g. the constraints actually do what they are supposed to do.
     * **`globals`**: if the model contains global constraints.
     * **`correctProblem`**: if the proposed model solves the correct problem.
@@ -60,4 +64,9 @@ To reproduce our experiments:
 
    ```bash
    python generate.py gpt4
+   ```
+4. Run the completition script with one of the supported LLMs (`gpt4`, `claude4`, `r1`). Example:
+
+   ```bash
+   python complete.py gpt4
    ```
