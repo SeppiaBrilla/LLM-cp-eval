@@ -1,0 +1,1 @@
+exceed the capacity of the respective station. The problem is to determine the optimal sequence of car production that maximizes the assembly line's efficiency while ensuring that no station is overwhelmed, and all customer preferences for car options are met.

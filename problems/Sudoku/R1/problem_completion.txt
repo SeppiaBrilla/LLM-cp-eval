@@ -1,0 +1,1 @@
+Sudoku is a logic-based number placement puzzle. The standard game is played on a 9×9 grid, subdivided into nine 3×3 subgrids ("boxes"). The goal is to fill each cell with a number from 1 to 9 such that each row, each column, and each 3x3 box contains all digits from 1 to 9 exactly once.

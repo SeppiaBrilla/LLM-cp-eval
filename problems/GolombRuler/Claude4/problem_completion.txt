@@ -1,0 +1,1 @@
+A Golomb ruler may be defined as a set of m integers 0=a1<a2<…<am such that the m(m−1)/2 differences aj−ai,1<=i<j<=m are distinct. Such a ruler is said to contain m marks and is of length am. The problem is to find the shortest Golomb ruler with a given number of marks, known as the optimal Golomb ruler for that number of marks.

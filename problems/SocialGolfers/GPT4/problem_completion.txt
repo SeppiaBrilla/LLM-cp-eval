@@ -1,0 +1,1 @@
+want to schedule their games so that no two golfers play together more than once. The coordinator is struggling to create a schedule that ensures this condition is met and needs a system that can automatically generate such a schedule.

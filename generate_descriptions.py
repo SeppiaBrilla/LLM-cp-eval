@@ -7,55 +7,57 @@ import anthropic
 
 load_dotenv()
 
-def ask_r1(prompt: str, system_prompt: str = "You are a helpful assistant."):
+def ask_r1(prompt: str):
     api_key = os.getenv("DEEPSEEK_API_KEY")
 
     if not api_key:
         raise ValueError("API key not found. Please set DEEPSEEK_API_KEY in your .env file.")
 
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    # Use the completions endpoint instead of chat.completions
+    full_prompt = f"""Complete the following problem description. Provide me with a single description, the one you deem as best fitting. Do not add anything else but the completition of the problem. Include also the initial problem: 
+     {prompt}"""
     response = client.chat.completions.create(
         model="deepseek-reasoner",
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": full_prompt}
         ],
         temperature=0  # deterministic response
     )
     return response.choices[0].message.content
 
-def ask_gpt(prompt: str, system_prompt: str = "You are a helpful assistant."):
+def ask_gpt(prompt: str):
     api_key = os.getenv("OPENAI_API_KEY")
 
     if not api_key:
         raise ValueError("API key not found. Please set OPENAI_API_KEY in your .env file.")
 
     client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
+    full_prompt = f"""Complete the following problem description. Provide me with a single description, the one you deem as best fitting. Do not add anything else but the completition of the problem. Include also the initial problem: 
+     {prompt}"""
+    response = client.responses.create(
         model="gpt-4",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0  # deterministic response
+        input=full_prompt,
+        temperature=0
     )
-    return response.choices[0].message.content
+    return response.output_text
 
-def ask_claude(prompt: str, system_prompt: str = "You are a helpful assistant."):
+def ask_claude(prompt: str):
     api_key = os.getenv("CLAUDE_API_KEY")
 
     if not api_key:
         raise ValueError("API key not found. Please set CLAUDE_API_KEY in your .env file.")
 
     claude_client = anthropic.Anthropic(api_key=api_key)
+    full_prompt = f"""Complete the following problem description. Provide me with a single description, the one you deem as best fitting. Do not add anything else but the completition of the problem. Include also the initial problem: 
+     {prompt}"""
 
     with claude_client.messages.stream(
         model="claude-sonnet-4-20250514",
         max_tokens=64000,
-        temperature=0,  # deterministic response
-        system=system_prompt,
+        temperature=0,
         messages=[
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": full_prompt}
         ],
     ) as stream:
         output_text = ""
@@ -64,7 +66,7 @@ def ask_claude(prompt: str, system_prompt: str = "You are a helpful assistant.")
                 output_text += event.delta.text
     return output_text
 
-def generate(system_prompt:str, model_type:str):
+def generate(model_type:str):
     if model_type == 'gpt4':
         model_dir = 'GPT4'
         model_func = ask_gpt
@@ -83,25 +85,18 @@ def generate(system_prompt:str, model_type:str):
             content = f.read()
         lines = content.splitlines()
         assert lines[0] == "original:"
-        original, modified = "", ""
-        is_original = True
+        original = ""
         for line in lines[1:]:
             if line == "modified:":
-                is_original = False
-            elif is_original:
-                original += "\n" + line
-            else:
-                modified += "\n" + line
+                break
+            original += "\n" + line
+        original = original[:len(original)//2]
         if not os.path.exists(f'./problems/{element}/{model_dir}'):
             os.mkdir(f'./problems/{element}/{model_dir}')
-        original_model = model_func(original, system_prompt)
-        assert original_model is not None
-        with open(f'./problems/{element}/{model_dir}/api_original.desc', 'w') as f:
-            f.write(original_model)
-        modified_model = model_func(modified, system_prompt)
-        assert modified_model is not None
-        with open(f'./problems/{element}/{model_dir}/api_modified.desc', 'w') as f:
-            f.write(modified_model)
+        problem_description = model_func(original)
+        assert problem_description is not None
+        with open(f'./problems/{element}/{model_dir}/problem_completion.txt', 'w') as f:
+            f.write(problem_description)
 
 def main():
     if len(sys.argv) < 2:
@@ -110,10 +105,7 @@ def main():
     llm_model = sys.argv[1].lower()
     if not llm_model in ["gpt4", "claude4", "r1"]:
         print(f"llm {llm_model} not supported. Available are: gpt4, claude4, r1")
-    with open("system_prompt.txt") as f:
-        system_prompt = f.read()
-    generate(system_prompt, llm_model)
-    
+    generate(llm_model)
 
 if __name__ == "__main__":
     main()

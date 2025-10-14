@@ -1,0 +1,1 @@
+ther due to safety regulations or to prevent damage to the contents. The problem is to determine the optimal arrangement of containers on the deck to maximize the number of containers transported while adhering to the class-based separation constraints.

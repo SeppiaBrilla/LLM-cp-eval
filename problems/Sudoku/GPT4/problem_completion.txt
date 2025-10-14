@@ -1,0 +1,1 @@
+number from 1 to 9, following the rule that each row, column, and box must contain each number exactly once. The challenge is that some numbers are already placed in certain cells as a hint, and the player must figure out where to place the remaining numbers based on these hints and the game's rules.

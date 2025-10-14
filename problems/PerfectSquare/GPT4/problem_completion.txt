@@ -1,0 +1,1 @@
+solution is considered valid only if the big square's area is exactly equal to the sum of the areas of the smaller squares.

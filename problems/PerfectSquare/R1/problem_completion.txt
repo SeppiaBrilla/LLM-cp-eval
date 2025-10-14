@@ -1,0 +1,1 @@
+The perfect square placement problem (also called the squared square problem) is to pack a set of squares with given integer sizes into a bigger square in such a way that no squares overlap each other and all square borders are parallel to the border of the big square. For a perfect placement problem, all squares must have distinct sizes.

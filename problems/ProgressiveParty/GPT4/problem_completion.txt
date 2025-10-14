@@ -1,0 +1,1 @@
+e problem is to create a schedule that ensures all crews visit each host boat without exceeding the boat's capacity, while also ensuring that each crew has the opportunity to visit multiple host boats throughout the event. The schedule must also take into account the different crew sizes and the fact that the host crew must remain on board their boat at all times.

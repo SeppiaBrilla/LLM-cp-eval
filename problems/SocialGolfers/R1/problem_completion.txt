@@ -1,0 +1,1 @@
+The coordinator of a local golf club has come to you with the following problem. In their club, there are 32 social golfers, each of whom play golf once a week, and always in groups of 4. They want to schedule the groups for as many weeks as possible such that no two golfers play together in the same group more than once.
