@@ -1,0 +1,21 @@
+original:
+Given the twelve standard pitch-classes (c, c#, d, ...), represented by numbers 0,1,...,11, find a series in which each pitch-class occurs exactly once and in which the musical intervals between neighbouring notes cover the full set of intervals from the minor second (1 semitone) to the major seventh (11 semitones). That is, for each of the intervals, there is a pair of neighbouring pitch-classes in the series, between which this interval appears.
+The problem of finding such a series can be easily formulated as an instance of a more general arithmetic problem on Zn, the set of integer residues modulo n. Given n \in N, find a vector s=(s1,...,sn), such that
+1. s is a permutation of Zn=0,1,...,n−1; and
+2. the interval vector v=(|s2−s1|,|s3−s2|,...,|sn−sn−1|) is a permutation of Zn∖{0}={1,2,...,n−1}.
+A vector v satisfying these conditions is called an all-interval series of size n; the problem of finding such a series is the all-interval series problem of size n. 
+modified-context-only:
+A laboratory has n distinct DNA samples, labeled (0 to n-1). Each sample has a unique number of base pairs. The scientist must determine an order in which to process all samples, with the following constraints:
+1. Unique Processing: Each DNA sample must be processed exactly once.
+2. Unique Differences: The difference in base-pair counts between consecutive samples must be unique, covering all possible differences from 1 to (n-1).
+We seek a sequence ( s = (s1 to sn) ) of the samples such that:
+- s is a permutation of {0, 1, ..., n-1}.
+- The absolute differences between consecutive samples, (|s2 - s1|, |s3 - s2|, ..., |sn - sn-1|), form a permutation of {1, 2, ..., n-1}.
+modified-distractor:
+A laboratory has n distinct DNA samples, labeled (0 to n-1). Each sample has a unique number of base pairs. The scientist must determine an order in which to process all samples, with the following constraints:
+1. Unique Processing: Each DNA sample must be processed exactly once.
+2. Unique Differences: The difference in base-pair counts between consecutive samples must be unique, covering all possible differences from 1 to (n-1).
+Some DNA samples are sensitive to temperature fluctuations. The lab technician wants to avoid large jumps in base-pair counts between consecutive experiments because it could require recalibrating the equipment.
+We seek a sequence ( s = (s1 to sn) ) of the samples such that:
+- s is a permutation of {0, 1, ..., n-1}.
+- The absolute differences between consecutive samples, (|s2 - s1|, |s3 - s2|, ..., |sn - sn-1|), form a permutation of {1, 2, ..., n-1}.

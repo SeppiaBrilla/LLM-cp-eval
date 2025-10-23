@@ -1,5 +1,0 @@
-original:
-The coordinator of a local golf club has come to you with the following problem. In their club, there are 32 social golfers, each of whom play golf once a week, and always in groups of 4. They would like you to come up with a schedule of play for these golfers, to last as many weeks as possible, such that no golfer plays in the same group as any other golfer on more than one occasion.
-modified:
-A research institute is organizing weekly brainstorming sessions for a group of 32 scientists. Each week, the scientists are divided into teams of 4 to collaborate on short projects.
-The coordinator wants to maximise sociality by designing a schedule that lasts as many weeks as possible, under the condition that no two scientists work in the same team more than once. This to ensure to minimize missed collaboration opportunities.

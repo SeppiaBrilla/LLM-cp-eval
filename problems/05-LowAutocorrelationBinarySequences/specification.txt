@@ -1,0 +1,15 @@
+original:
+These problems have many practical applications in communications and electrical engineering. The objective is to construct a binary sequence Si of length n that minimizes the autocorrelations between bits. Each bit in the sequence takes the value +1 or -1. With non-periodic (or open) boundary conditions, the k-th autocorrelation, C_k is defined to be \sum_{i=0}^{n-k-1} S_i * S_{i + k}. The aim is to minimize the sum of the squares of these autocorrelations. That is, to minimize E=\sum_{k=1}^{n-1}C_k^2.
+modified-context-only:
+A composer is creating a rhythm pattern consisting of n beats. At each time step i of the rhythm sequence S, there can either be a beat (+1) or a rest (-1).
+The composer wishes to design a rhythm that avoids repetitive or self-similar patterns, which can make the music sound mechanical.
+To measure how repetitive the rhythm is, we define the autocorrelation at lag (k) as follows: C_k = \sum_{i=1}^{n-k} S_i \cdot S_{i+k}
+Each (C_k) quantifies how similar the rhythm is to itself when shifted by (k) beats. A large absolute value of (C_k) indicates strong repetition at that spacing.
+The overall repetitiveness of the rhythm is defined as: E = \sum_{k=1}^{n-1} C_k^2. The objective is to find the rhythm (i.e., the sequence S_i \in {+1, -1}) that minimizes (E).
+modified-distractor:
+A composer is creating a rhythm pattern consisting of n beats. At each time step i of the rhythm sequence S, there can either be a beat (+1) or a rest (-1).
+The composer wishes to design a rhythm that avoids repetitive or self-similar patterns, which can make the music sound mechanical.
+To measure how repetitive the rhythm is, we define the autocorrelation at lag (k) as follows: C_k = \sum_{i=1}^{n-k} S_i \cdot S_{i+k}
+Each (C_k) quantifies how similar the rhythm is to itself when shifted by (k) beats. A large absolute value of (C_k) indicates strong repetition at that spacing.
+The overall repetitiveness of the rhythm is defined as: E = \sum_{k=1}^{n-1} C_k^2. The objective is to find the rhythm (i.e., the sequence S_i \in {+1, -1}) that minimizes (E).
+Since the rhythm will be played on a percussion instrument where consecutive beats of the same type tend to reinforce each other, producing slightly louder or softer passages depending on the sequence, the composer must also take this behaviour into account when designing the pattern so that it remains as balanced and varied as possible.

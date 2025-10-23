@@ -1,0 +1,42 @@
+original:
+An order m quasigroup is a Latin square of size m. That is, a m x m multiplication table in which each element occurs once in every row and column. For example,
+1    2   3   4
+4    1   2   3
+3    4   1   2
+2    3   4   1
+is an order 4 quasigroup. A quasigroup can be specified by a set and a binary multiplication operator, * defined over this set. Quasigroup existence problems determine the existence or non-existence of quasigroups of a given size with additional properties. Certain existence problems are of sufficient interest that a naming scheme has been invented for them. We define two new relations, *321 and *312 by a∗321b=c iff c∗b=a and a∗312b=c iff b∗c=a.
+QG1.m problems are order m quasigroups for which if a∗b=c, a∗b=c∗d and a∗321b=c∗321d then a=c and b=d.
+modified-context-only:
+A delivery company operates a fleet of m drones, each responsible for performing deliveries across m delivery zones. Every drone must deliver exactly once to every zone, and deliveries are assigned to time slots such that:
+- Each drone uses every time slot exactly once.
+- Each delivery zone receives one delivery in every time slot.
+For example, a valid schedule of order 4 could be:
+Drone    Zone1   Zone2   Zone3   Zone4
+D1    1   2   3   4
+D2    4   1   2   3
+D3    3   4   1   2
+D4    2   3   4   1
+Where the entry in row a and column b indicates the time slot c assigned to drone a delivering to zone b. We define the delivery assignment as a binary operation
+- a * b = c meaning that Drone a delivers to Zone b in Time Slot c.
+We also define two derived coordination patterns:
+- *321 where a *321 b = c if c * b = a.
+- *312 where a *312 b = c if b * c = a.
+
+A DS1.m delivery schedule of order m is a valid delivery matrix such that if a * b = c, a * b = c * d and a *321 b = c *321 d, then a = c and b = d. Our task is to find a DS1.m schedule (if it exists) for a given m
+modified-distractor:
+A delivery company operates a fleet of m drones, each responsible for performing deliveries across m delivery zones. To optimize operational efficiency, the company also aims to ensure that no drone consumes significantly more energy than the others during a day’s schedule. Because energy usage depends mainly on the timing and ordering of deliveries, the scheduling system must take this balance into account when generating the assignment table. Every drone must deliver exactly once to every zone, and deliveries are assigned to time slots such that:
+- Each drone uses every time slot exactly once.
+- Each delivery zone receives one delivery in every time slot.
+For example, a valid schedule of order 4 could be:
+Drone    Zone1   Zone2   Zone3   Zone4
+D1    1   2   3   4
+D2    4   1   2   3
+D3    3   4   1   2
+D4    2   3   4   1
+Where the entry in row a and column b indicates the time slot c assigned to drone a delivering to zone b. We define the delivery assignment as a binary operation
+- a * b = c meaning that Drone a delivers to Zone b in Time Slot c.
+We also define two derived coordination patterns:
+- *321 where a *321 b = c if c * b = a.
+- *312 where a *312 b = c if b * c = a.
+
+A DS1.m delivery schedule of order m is a valid delivery matrix such that if a * b = c, a * b = c * d and a *321 b = c *321 d, then a = c and b = d. Our task is to find a DS1.m schedule (if it exists) for a given m

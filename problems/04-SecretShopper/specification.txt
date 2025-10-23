@@ -1,0 +1,27 @@
+original:
+A well-known cosmetic company wants to evaluate the performance of their sales people, who are stationed at the company’s counters at various department stores in different geographical locations. For this purpose, the company has hired some secret agents to disguise themselves as shoppers to visit the sales people. The visits must be scheduled in such a way that each sales person must be visited by shoppers of different varieties and that the visits should be spaced out roughly evenly. Also, shoppers should visit sales people in different geographic locations. The exact constraints, which ensure the statistical soundness of the project, follow.
+    There are a total of 19 outlets to be visited. They are located in 4 geographical regions: 5 outlets in Area 1 (outlet 1-5), 5 outlets in Area 2 (outlet 6-10), 5 outlets in Area 3 (outlet 11-15), and 4 outlets in Area 4 (outlet 16-19).
+    There will be 1 to 4 sales people in each outlet. Each sales person will be visited by 4 different shoppers. The frequency of visits to a particular outlet will be the number of sales people times 4. There are a total of 35 sales people working in all outlets everyday. Therefore, the total number of visits is 140.
+    The shoppers are divided into 4 groups according to age, professions, and etc. Each group has 10 shoppers. Therefore, the total number of shoppers is 40. Therefore, in each group of shoppers, 5 shoppers will perform 3 visits and the other 5 shoppers will perform 4 visits.
+    Each shopper should only visit 1 outlet in each of the 4 areas.
+    All sales people should be visited 2 times in the first 2 weeks of fieldwork.
+    The total fieldwork period will be 4 weeks. Theoretically, each shopper has to pay 1 visit each week. However, shoppers making 4 visits must have done 2 visits by the end of the second week. Shoppers making 3 visits should have done 1 or 2 visits by the end of the second week. The data of the first 50% visits will be analysed and put in an interim report.
+modified-context-only:
+A police commander is looking to gather insights about the deployment of his officers across the city. To assist with this, several special agents have been assigned to observe the officers’ routines. The scheduling of these observations should follow a structured plan. Key details include:
+    The city is divided into 4 zones, containing a total of 19 locations: Zone 1 (spots 1–5), Zone 2 (spots 6–10), Zone 3 (spots 11–15), and Zone 4 (spots 16–19).
+    Each location hosts between 1 and 4 officers. Across all locations, there are 35 officers, and each officer will receive 4 separate visits from the agents, resulting in a total of 140 visits.
+    The agents are organized into 4 distinct groups of 10, each with unique characteristics.
+    Each agent is expected to visit one location in each of the 4 zones.
+    Early observations should be concentrated: every officer should receive 2 visits during the first 2 weeks of fieldwork.
+    The observation period will last 4 weeks, with an interim report produced after the first half of the visits have been completed.
+    The overall goal is to organize the agents’ activities in a way that allows the commander to extract meaningful insights from their observations.
+modified-distractor:
+A police commander is looking to gather insights about the deployment of his officers across the city. To assist with this, several special agents have been assigned to observe the officers’ routines. The scheduling of these observations should follow a structured plan. Key details include:
+    The city is divided into 4 zones, containing a total of 19 locations: Zone 1 (spots 1–5), Zone 2 (spots 6–10), Zone 3 (spots 11–15), and Zone 4 (spots 16–19).
+    Each location hosts between 1 and 4 officers. Across all locations, there are 35 officers, and each officer will receive 4 separate visits from the agents, resulting in a total of 140 visits.
+    The agents are organized into 4 distinct groups of 10, each with unique characteristics.
+    Each agent is expected to visit one location in each of the 4 zones.
+    Early observations should be concentrated: every officer should receive 2 visits during the first 2 weeks of fieldwork.
+    The observation period will last 4 weeks, with an interim report produced after the first half of the visits have been completed.
+    Each agent has a personal workload limit to avoid burnout. Ideally, visits should be evenly spaced among agents.
+    The overall goal is to organize the agents’ activities in a way that allows the commander to extract meaningful insights from their observations.

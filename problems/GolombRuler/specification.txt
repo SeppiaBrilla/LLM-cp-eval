@@ -1,7 +1,0 @@
-original:
-A Golomb ruler may be defined as a set of m integers 0=a1<a2<…<am such that the m(m−1)/2 differences aj−ai,1<=i<j<=m are distinct. Such a ruler is said to contain m marks and is of length am. The objective is to find optimal (minimum length) or near optimal rulers. Note that a symmetry can be removed by adding the constraint that a2−a1<am−am−1, the first difference is less than the last.
-modified:
-An engineer is working on the design of a series of signal beacons that must be positioned along a straight path. The placement must follow very particular rules to avoid interference between the beacons.
-There will be m beacons positioned at points along the path, with the first always starting at position 0
-All pair of beacors should have a unique distance that cannot be shared with another pair. 
-The total design length corresponds to the last beacon position. Since making the path is expensive, we want to maximise the savings by making the path as short as we can.
