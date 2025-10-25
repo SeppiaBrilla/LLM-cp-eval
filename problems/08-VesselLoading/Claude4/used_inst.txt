@@ -1,0 +1,23 @@
+int: gallery_width = 5;   % Width of the gallery
+int: gallery_height = 5;  % Height of the gallery
+int: n_artworks = 2;      % Number of artworks to place
+
+% Artwork dimensions
+array[1..n_artworks] of int: artwork_width = [2, 2];
+array[1..n_artworks] of int: artwork_height = [2, 2];
+
+% Artwork categories (for distance constraints)
+array[1..n_artworks] of int: artwork_category = [1, 2];
+
+% Distance requirements between categories
+int: n_distance_rules = 2;
+array[1..n_distance_rules] of int: cat1 = [1, 2];  % First category in distance rule
+array[1..n_distance_rules] of int: cat2 = [1, 2];  % Second category in distance rule
+array[1..n_distance_rules] of int: min_distance = [1, 2];  % Minimum required distance
+
+% Reserved spaces (rectangular areas that cannot be used)
+int: n_reserved = 1;
+array[1..n_reserved] of int: reserved_x1 = [0];  % Left boundary of reserved area
+array[1..n_reserved] of int: reserved_y1 = [0];  % Bottom boundary of reserved area
+array[1..n_reserved] of int: reserved_x2 = [0];  % Right boundary of reserved area
+array[1..n_reserved] of int: reserved_y2 = [0];  % Top boundary of reserved area

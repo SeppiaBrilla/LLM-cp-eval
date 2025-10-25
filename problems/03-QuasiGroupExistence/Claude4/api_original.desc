@@ -1,0 +1,82 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need a 3D array to represent the quasigroup multiplication table. Let `q[i,j,k]` be a boolean variable that is true if `i * j = k` in the quasigroup, where `i`, `j`, `k` range from 1 to `m`.
+
+2. **Domains**: All variables `i`, `j`, `k` have domain `1..m`. The boolean variables `q[i,j,k]` have domain `{true, false}`.
+
+3. **Basic Quasigroup Constraints**:
+   - Each pair `(i,j)` must have exactly one result `k` such that `i * j = k`
+   - Each element `k` must appear exactly once in each row `i` (for all `j`)
+   - Each element `k` must appear exactly once in each column `j` (for all `i`)
+
+4. **Additional Relations**: We need to define the relations `*321` and `*312`:
+   - `a *321 b = c` iff `c * b = a`
+   - `a *312 b = c` iff `b * c = a`
+
+5. **QG1.m Property**: The key constraint is that if `a*b = c`, `a*b = c*d`, and `a*321 b = c*321 d`, then `a = c` and `b = d`. 
+   - Since `a*b = c` and `a*b = c*d`, we have `c = c*d`, which means `d` is the right identity for `c`
+   - The condition `a*321 b = c*321 d` means there exist `x` and `y` such that `x*b = a`, `y*d = c`, and `x = y`
+   - The conclusion `a = c` and `b = d` must hold
+
+6. **Modeling Choice**: We can model this as a constraint satisfaction problem where we're looking for any valid quasigroup satisfying the QG1.m property, or we could add a simple objective to find one solution.
+
+**MiniZinc model:**
+
+```minizinc
+% QG1.m Quasigroup Problem
+% Find an order m quasigroup satisfying the QG1.m property
+
+int: m; % order of the quasigroup
+
+% Decision variables: q[i,j,k] is true iff i * j = k
+array[1..m, 1..m, 1..m] of var bool: q;
+
+% Basic quasigroup constraints
+
+% Each (i,j) pair has exactly one result k
+constraint forall(i, j in 1..m) (
+    sum(k in 1..m)(q[i,j,k]) = 1
+);
+
+% Each element k appears exactly once in each row i
+constraint forall(i, k in 1..m) (
+    sum(j in 1..m)(q[i,j,k]) = 1
+);
+
+% Each element k appears exactly once in each column j  
+constraint forall(j, k in 1..m) (
+    sum(i in 1..m)(q[i,j,k]) = 1
+);
+
+% QG1.m property constraint
+% If a*b = c, a*b = c*d, and a*321 b = c*321 d, then a = c and b = d
+constraint forall(a, b, c, d in 1..m) (
+    % If a*b = c and c*d = c (meaning a*b = c*d)
+    (q[a,b,c] /\ q[c,d,c]) ->
+    % And if a*321 b = c*321 d (i.e., exists x,y: x*b=a, y*d=c, x=y)
+    (exists(x in 1..m)(q[x,b,a] /\ q[x,d,c])) ->
+    % Then a = c and b = d
+    (a = c /\ b = d)
+);
+
+% Alternative formulation of QG1.m property using the definition more directly
+% For any a,b,c,d: if conditions hold, then a=c and b=d
+constraint forall(a, b, c, d, x, y in 1..m) (
+    (q[a,b,c] /\ q[c,d,c] /\ q[x,b,a] /\ q[y,d,c] /\ x = y) ->
+    (a = c /\ b = d)
+);
+
+% Symmetry breaking: fix first row to be 1,2,3,...,m
+constraint forall(j in 1..m) (
+    q[1,j,j] = true
+);
+
+% Output the multiplication table
+output [
+    if j = 1 then "\n" else " " endif ++
+    show(sum(k in 1..m)(k * bool2int(q[i,j,k])))
+    | i, j in 1..m
+] ++ ["\n"];
+
+solve satisfy;
+```

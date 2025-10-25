@@ -4,10 +4,15 @@
         "globals": false,
         "correctProblem": true
     },
-    "modified": {
+    "modified-context": {
         "runs": false,
         "globals": false,
         "correctProblem": true
+    },
+    "modified-distractor":{
+        "runs":false,
+        "globals":false,
+        "correctProblem":false
     },
     "similar": false
 }

@@ -1,0 +1,49 @@
+**Reasoning:**
+
+1. **Problem Understanding**: The goal is to find a sequence S of length n, where each element S_i is either +1 (beat) or -1 (rest), that minimizes the overall repetitiveness E. E is defined as the sum of squares of autocorrelations C_k for lags k from 1 to n-1, where each C_k measures the similarity between the sequence and itself shifted by k beats.
+
+2. **Decision Variables**: The sequence S is represented using Boolean variables B[i] for i=1..n, where B[i] = true corresponds to S_i = +1, and B[i] = false corresponds to S_i = -1. This avoids the need for integer variables with domains excluding 0.
+
+3. **Autocorrelation Calculation**: For each lag k from 1 to n-1, C_k is computed as the sum of S_i * S_{i+k} over i=1 to n-k. Since S_i * S_{i+k} is 1 when S_i and S_{i+k} are the same (i.e., B[i] == B[i+k]) and -1 when they differ, C_k can be expressed as 2 * A_k - (n - k), where A_k is the number of indices i where B[i] == B[i+k] for i=1 to n-k.
+
+4. **Objective Function**: E is the sum of C_k^2 for k=1 to n-1. Minimizing E reduces the repetitiveness of the rhythm.
+
+5. **Modeling Choices**: Using Boolean variables for B and computing C_k directly from B comparisons simplifies the model. The output sequence S is derived from B during output to match the problem's ±1 format.
+
+6. **Constraints**: The model includes constraints to define C_k for each k and E based on the Boolean variables. No additional constraints are needed since the domain of B is already restricted.
+
+7. **Output**: The solution outputs the sequence S as a list of +1 and -1 values.
+
+**MiniZinc model:**
+```minizinc
+% Minimize repetitiveness in a rhythm pattern of n beats
+% Each beat is either +1 (beat) or -1 (rest)
+% Autocorrelation at lag k: C_k = sum_{i=1}^{n-k} S_i * S_{i+k}
+% Overall repetitiveness: E = sum_{k=1}^{n-1} C_k^2
+% Objective: minimize E
+
+int: n; % Number of beats (parameter)
+
+% Decision variables: B[i] is true if beat at position i, false if rest
+array[1..n] of var bool: B;
+
+% Autocorrelation C_k for k=1..n-1
+array[1..n-1] of var int: C;
+
+% Constraint to compute C_k for each lag k
+constraint forall(k in 1..n-1)(
+    C[k] = 2 * sum(i in 1..n-k)(bool2int(B[i] == B[i+k])) - (n - k)
+);
+
+% Objective variable: E is the sum of squares of C_k
+var int: E;
+constraint E = sum(k in 1..n-1)(C[k] * C[k]);
+
+% Minimize E
+solve minimize E;
+
+% Output the sequence S as +1 and -1
+output [ "Sequence S = " ] ++ 
+       [ if fix(B[i]) then "1" else "-1" endif | i in 1..n ] ++ 
+       [ "\nE = " ++ show(E) ];
+```

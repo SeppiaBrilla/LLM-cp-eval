@@ -1,0 +1,102 @@
+**Reasoning:**
+
+1. **Decision Variables:**
+   - We need to determine how many frames to use and what goes on each frame
+   - Let's define binary variables `x[f,v]` indicating whether variation `v` is placed on frame `f`
+   - We need integer variables `count[f,v]` for how many copies of variation `v` are placed on frame `f`
+   - We need a binary variable `used[f]` to indicate if frame `f` is actually used
+   - The total number of frames used will be our primary decision variable
+
+2. **Parameters needed:**
+   - Number of variations available: `n_variations`
+   - Demand for each variation: `demand[v]`
+   - Maximum capacity per frame: `max_panels_per_frame`
+   - Incompatible variation pairs (due to misalignment issues): `incompatible[v1,v2]`
+   - Maximum number of frames available: `max_frames`
+
+3. **Constraints:**
+   - Demand satisfaction: Sum of `count[f,v]` across all frames must meet `demand[v]` for each variation
+   - Frame capacity: Total panels on each frame cannot exceed `max_panels_per_frame`
+   - Incompatibility: If two variations are incompatible, they cannot be on the same frame
+   - Logical consistency: `count[f,v] > 0` implies `x[f,v] = 1`, and `x[f,v] = 0` implies `count[f,v] = 0`
+   - Frame usage: If any variation is placed on frame `f`, then `used[f] = 1`
+
+4. **Objective:**
+   - Minimize the total number of frames used: `minimize sum(f in 1..max_frames)(used[f])`
+
+5. **Modeling choices:**
+   - We'll use a maximum reasonable number of frames as an upper bound
+   - The incompatibility constraint can be modeled as: if `x[f,v1] = 1` and `x[f,v2] = 1`, then `incompatible[v1,v2]` must be false
+   - We need to ensure that unused frames don't contribute to the solution
+
+**MiniZinc model:**
+
+```minizinc
+% Paper Panel Frame Optimization Problem
+% Minimize the number of frames needed while satisfying demand and constraints
+
+% Parameters
+int: n_variations;                    % Number of different panel variations
+int: max_frames;                      % Maximum number of frames available
+int: max_panels_per_frame;           % Maximum panels that can fit on one frame
+
+array[1..n_variations] of int: demand;  % Demand for each variation
+
+% Incompatibility matrix: incompatible[i,j] = true if variations i and j cannot be on same frame
+array[1..n_variations, 1..n_variations] of bool: incompatible;
+
+% Decision Variables
+array[1..max_frames, 1..n_variations] of var 0..max_panels_per_frame: count;  % Number of each variation on each frame
+array[1..max_frames, 1..n_variations] of var bool: x;                         % Whether variation is placed on frame
+array[1..max_frames] of var bool: used;                                       % Whether frame is used
+
+% Objective: Minimize number of frames used
+minimize sum(f in 1..max_frames)(used[f]);
+
+% Constraints
+
+% 1. Demand satisfaction: total production must meet demand
+constraint forall(v in 1..n_variations)(
+    sum(f in 1..max_frames)(count[f,v]) = demand[v]
+);
+
+% 2. Frame capacity: total panels on each frame cannot exceed maximum
+constraint forall(f in 1..max_frames)(
+    sum(v in 1..n_variations)(count[f,v]) <= max_panels_per_frame
+);
+
+% 3. Logical consistency: count > 0 iff x = true
+constraint forall(f in 1..max_frames, v in 1..n_variations)(
+    (count[f,v] > 0) <-> (x[f,v] = true)
+);
+
+% 4. Frame usage: frame is used iff at least one variation is placed on it
+constraint forall(f in 1..max_frames)(
+    used[f] <-> exists(v in 1..n_variations)(x[f,v])
+);
+
+% 5. Incompatibility: incompatible variations cannot be on the same frame
+constraint forall(f in 1..max_frames, v1, v2 in 1..n_variations where v1 < v2)(
+    incompatible[v1,v2] -> not(x[f,v1] /\ x[f,v2])
+);
+
+% 6. Symmetry breaking: use frames in order
+constraint forall(f in 1..max_frames-1)(
+    used[f+1] -> used[f]
+);
+
+% Output formatting
+output [
+    "Number of frames used: ", show(sum(f in 1..max_frames)(used[f])), "\n",
+    "Frame assignments:\n"
+] ++
+[
+    if used[f] then
+        "Frame " ++ show(f) ++ ": " ++
+        concat([if count[f,v] > 0 then "V" ++ show(v) ++ "×" ++ show(count[f,v]) ++ " " else "" endif | v in 1..n_variations]) ++
+        "\n"
+    else ""
+    endif
+    | f in 1..max_frames
+];
+```

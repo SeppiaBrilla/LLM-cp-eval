@@ -1,0 +1,59 @@
+Reasoning:
+
+1. Decision Variables:
+   - We need to decide the teams for each week. This can be represented as a 3D array `teams[week, team, member]` where `week` is the week number, `team` is the team number in that week, and `member` is the member number in that team. The value of `teams[week, team, member]` is the scientist number.
+
+2. Domains:
+   - The domain of `teams[week, team, member]` is 1 to 32, representing the 32 scientists.
+
+3. Constraints:
+   - Each scientist can only appear once in each week. This can be ensured by making sure that each row (representing a week) in the `teams` array is an all-different array.
+   - No two scientists work together twice. This can be ensured by making sure that for each pair of scientists, the number of times they appear in the same team is at most 1.
+   - Each team should be as interdisciplinary as possible. This can be ensured by making sure that each team has at most one scientist from each research area.
+
+4. Objective Function:
+   - The objective is to maximize the number of weeks. This can be modeled as a maximization problem where the objective function is the number of weeks.
+
+5. Simplifications or Modeling Choices:
+   - We can simplify the problem by assuming that the number of weeks is fixed and large enough (e.g., 100 weeks). This way, we can focus on the constraints and the objective function without worrying about the number of weeks.
+   - We can also simplify the problem by assuming that the number of teams in each week is fixed and equal to the number of scientists divided by the team size (i.e., 32 / 4 = 8 teams).
+
+MiniZinc model:
+
+```minizinc
+% Define the parameters
+int: n_scientists = 32; % number of scientists
+int: n_areas = 4; % number of research areas
+int: n_teams = n_scientists div n_areas; % number of teams
+int: n_weeks = 100; % number of weeks (assumed to be large enough)
+set of int: Scientists = 1..n_scientists;
+set of int: Areas = 1..n_areas;
+set of int: Teams = 1..n_teams;
+set of int: Weeks = 1..n_weeks;
+
+% Define the decision variable
+array[Weeks, Teams, Areas] of var Scientists: teams;
+
+% Define the constraints
+constraint forall(w in Weeks)(
+  % Each scientist can only appear once in each week
+  forall(t in Teams)(all_different([teams[w, t, a] | a in Areas]))
+);
+
+constraint forall(s1, s2 in Scientists where s1 < s2)(
+  % No two scientists work together twice
+  sum([bool2int(teams[w, t, a1] = s1 /\ teams[w, t, a2] = s2) | w in Weeks, t in Teams, a1, a2 in Areas where a1 != a2]) <= 1
+);
+
+constraint forall(w in Weeks, t in Teams)(
+  % Each team has at most one scientist from each research area
+  all_different([teams[w, t, a] | a in Areas])
+);
+
+% Define the objective function
+var int: n_valid_weeks = sum([bool2int(forall(t in Teams)(all_different([teams[w, t, a] | a in Areas]))) | w in Weeks]);
+solve maximize n_valid_weeks;
+
+% Output the solution
+output [ "Week " ++ show(w) ++ ": " ++ show([teams[w, t, a] | t in Teams, a in Areas]) ++ "\n" | w in Weeks ];
+```

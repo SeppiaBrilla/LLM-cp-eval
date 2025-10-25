@@ -1,0 +1,59 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need to determine the order in which to process the DNA samples. This means we need a sequence of n positions, where each position contains one of the sample labels (0 to n-1).
+
+2. **Variable Domains**: 
+   - Let `s[i]` represent the sample processed at position i, where i ranges from 1 to n
+   - Each `s[i]` must be in the range 0 to n-1
+   - The sequence s must be a permutation of {0, 1, ..., n-1}
+
+3. **Constraints to Encode**:
+   - **Unique Processing**: Each sample appears exactly once in the sequence (permutation constraint)
+   - **Unique Differences**: The absolute differences between consecutive samples must form a permutation of {1, 2, ..., n-1}
+   - This means we need n-1 difference values, and each value from 1 to n-1 must appear exactly once
+
+4. **Problem Type**: This is a constraint satisfaction problem (CSP) - we're looking for any valid sequence that satisfies the constraints, not optimizing an objective function.
+
+5. **Modeling Choices**: 
+   - Use an array `s` of length n to represent the processing sequence
+   - Use an array `diffs` of length n-1 to represent the absolute differences
+   - Apply `all_different` constraints to ensure both arrays represent permutations
+   - Link the difference array to the sequence array through absolute value constraints
+
+**MiniZinc model:**
+
+```minizinc
+% DNA Sample Processing Order Problem
+% Find a permutation of samples such that consecutive differences are also a permutation
+
+include "globals.mzn";
+
+% Problem parameters
+int: n; % number of DNA samples (0 to n-1)
+
+% Decision variables
+array[1..n] of var 0..n-1: s;        % sequence of samples to process
+array[1..n-1] of var 1..n-1: diffs;  % absolute differences between consecutive samples
+
+% Constraints
+
+% Each sample must be processed exactly once (permutation of samples)
+constraint all_different(s);
+
+% The differences must cover all values from 1 to n-1 exactly once
+constraint all_different(diffs);
+
+% Link the differences to the sequence
+constraint forall(i in 1..n-1) (
+    diffs[i] = abs(s[i+1] - s[i])
+);
+
+% Solve the constraint satisfaction problem
+solve satisfy;
+
+% Output the solution
+output [
+    "Processing order: " ++ show(s) ++ "\n" ++
+    "Differences: " ++ show(diffs) ++ "\n"
+];
+```

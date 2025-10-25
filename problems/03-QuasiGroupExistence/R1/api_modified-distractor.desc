@@ -1,0 +1,50 @@
+**Reasoning:**
+
+1. **Problem Understanding:** We need to find a delivery schedule for m drones and m zones over m time slots, represented as an m x m matrix L where L[i,j] is the time slot when drone i delivers to zone j. The schedule must be a Latin square, meaning each row and each column contains each time slot exactly once.
+
+2. **Binary Operation:** The operation * is defined as a * b = L[a,b] for drones a and zones b, yielding time slot c.
+
+3. **Derived Operation *321:** a *321 b = c if c * b = a, i.e., L[c,b] = a. This is well-defined because each column of L is a permutation.
+
+4. **DS1 Condition:** The condition for a DS1 schedule is that if a * b = c * d and a *321 b = c *321 d, then a = c and b = d. This is equivalent to the map φ(a,b) = (a*b, a *321 b) being bijective. Since the domain and codomain have size m², bijectivity means φ is a permutation of all pairs.
+
+5. **Simplification:** The bijection condition simplifies to: for each y in 1..m, the values L[ L[y,j], j ] for j=1..m must be all different (i.e., form a permutation). This ensures that the images of φ for different b are disjoint.
+
+6. **Constraints:** The MiniZinc model must enforce:
+   - L is a Latin square: all rows and columns are permutations of 1..m.
+   - For each y, the values L[ L[y,j], j ] for j=1..m are all different.
+
+7. **Modeling:** We define a 2D array L of decision variables with domain 1..m. Constraints are added for rows, columns, and the DS1 condition using all_different.
+
+**MiniZinc Model:**
+```minizinc
+% Parameter for the order m
+int: m;
+
+% Decision variable: m x m matrix L where L[i,j] is the time slot for drone i and zone j
+array[1..m, 1..m] of var 1..m: L;
+
+% Constraint: Each row is a permutation of 1..m
+constraint forall(i in 1..m) (
+    all_different([L[i,j] | j in 1..m])
+);
+
+% Constraint: Each column is a permutation of 1..m
+constraint forall(j in 1..m) (
+    all_different([L[i,j] | i in 1..m])
+);
+
+% Constraint: DS1 condition - for each y, the values L[L[y,j], j] for j=1..m are all different
+constraint forall(y in 1..m) (
+    all_different([L[L[y,j], j] | j in 1..m])
+);
+
+% Solve satisfaction problem
+solve satisfy;
+
+% Output the matrix L in a readable format
+output [
+    if j == 1 then "\n" else "" endif ++ show(L[i,j]) 
+    | i in 1..m, j in 1..m
+];
+```

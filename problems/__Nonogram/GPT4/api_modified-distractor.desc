@@ -1,0 +1,39 @@
+**Problem Description**
+
+A farmer has a field of 10 hectares where he wants to plant wheat and barley. He has a limited amount of fertilizer, 200 kg, and insecticide, 100 liters. Every hectare of wheat requires 20 kg of fertilizer and 5 liters of insecticide, while every hectare of barley requires 10 kg of fertilizer and 15 liters of insecticide. The farmer estimates that the profit will be 200 dollars per hectare of wheat and 300 dollars per hectare of barley. How many hectares of each crop should the farmer plant to maximize his profit?
+
+**Reasoning**
+
+1. **Decision Variables:** The decision variables in this problem are the number of hectares of wheat (w) and barley (b) that the farmer should plant.
+
+2. **Domains:** The domains of the decision variables are the non-negative integers. The maximum number of hectares that can be planted is 10, so the domain of w and b is [0,10].
+
+3. **Constraints:** The constraints in this problem are the limitations on the amount of fertilizer and insecticide that the farmer has. The total amount of fertilizer used must be less than or equal to 200 kg, and the total amount of insecticide used must be less than or equal to 100 liters. This translates into the following constraints:
+   - 20w + 10b <= 200 (fertilizer constraint)
+   - 5w + 15b <= 100 (insecticide constraint)
+   - w + b <= 10 (hectares constraint)
+
+4. **Objective Function:** The objective function in this problem is to maximize the farmer's profit. The profit from wheat is 200 dollars per hectare and the profit from barley is 300 dollars per hectare. Therefore, the objective function is 200w + 300b.
+
+5. **Modeling Choices:** This problem can be modeled as a linear programming problem. The decision variables, constraints, and objective function are all linear. The decision variables are integers, so this is an integer programming problem.
+
+**MiniZinc model**
+
+```minizinc
+% Decision variables
+var 0..10: w; % hectares of wheat
+var 0..10: b; % hectares of barley
+
+% Constraints
+constraint 20*w + 10*b <= 200; % fertilizer constraint
+constraint 5*w + 15*b <= 100; % insecticide constraint
+constraint w + b <= 10; % hectares constraint
+
+% Objective function
+var int: profit = 200*w + 300*b;
+solve maximize profit;
+
+% Output solution
+output ["hectares of wheat: " ++ show(w), "hectares of barley: " ++ show(b), "profit: " ++ show(profit)];
+```
+This model will find the number of hectares of wheat and barley that the farmer should plant to maximize his profit, given the constraints on the amount of fertilizer and insecticide available.

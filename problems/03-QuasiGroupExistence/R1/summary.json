@@ -1,0 +1,18 @@
+{
+    "original": {
+        "runs": true,
+        "globals": true,
+        "correctProblem": true
+    },
+    "modified-context":{
+        "runs": true,
+        "globals": true,
+        "correctProblem": true
+    },
+    "modified-distractor": {
+        "runs": true,
+        "globals": true,
+        "correctProblem": true
+    },
+    "similar": false
+}

@@ -1,0 +1,44 @@
+Reasoning:
+
+1. Decision Variables:
+   - The decision variable is a 2D array `QG` of size `m x m` which represents the quasigroup. Each element `QG[i,j]` represents the value at row `i` and column `j` in the quasigroup.
+
+2. Domains:
+   - The domain of each element `QG[i,j]` is from `1` to `m` as each element in the quasigroup can take any value from `1` to `m`.
+
+3. Constraints:
+   - Each element occurs once in every row and column. This can be encoded using the `alldifferent` constraint in MiniZinc for each row and each column.
+   - For the condition `a∗b=c`, `a∗b=c∗d` and `a∗321b=c∗321d` then `a=c` and `b=d`, we need to ensure that for all `a`, `b`, `c`, `d` in the quasigroup, if `a*b = c`, `a*b = c*d` and `a*321b = c*321d` then `a = c` and `b = d`. This can be encoded using a for loop to iterate over all possible values of `a`, `b`, `c`, `d` and adding the constraint that if `a*b = c`, `a*b = c*d` and `a*321b = c*321d` then `a = c` and `b = d`.
+
+4. This is a satisfaction problem as we are trying to find a quasigroup that satisfies the given conditions.
+
+5. Potential Simplifications or Modeling Choices:
+   - We can simplify the problem by only considering the upper half of the quasigroup as the quasigroup is symmetric. This can reduce the number of constraints and make the problem easier to solve.
+
+MiniZinc model:
+
+```minizinc
+include "globals.mzn";
+
+% Size of the quasigroup
+int: m;
+
+% Quasigroup
+array[1..m, 1..m] of var 1..m: QG;
+
+% Each element occurs once in every row and column
+constraint forall(i in 1..m) (
+    alldifferent(row(QG, i)) /\ alldifferent(col(QG, i))
+);
+
+% For all a, b, c, d in the quasigroup, if a*b = c, a*b = c*d and a*321b = c*321d then a = c and b = d
+constraint forall(a in 1..m, b in 1..m, c in 1..m, d in 1..m) (
+    if QG[a,b] = c /\ QG[a,b] = QG[c,d] /\ QG[a,321*b] = QG[c,321*d] then
+        a = c /\ b = d
+    endif
+);
+
+solve satisfy;
+```
+
+Note: The above model assumes that the multiplication operator `*` is represented by the 2D array `QG` and the relations `*321` and `*312` are represented by multiplying the row index by `321` and `312` respectively. This is a simplification and may not accurately represent the actual relations `*321` and `*312`.

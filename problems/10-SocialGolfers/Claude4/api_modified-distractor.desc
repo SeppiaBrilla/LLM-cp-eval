@@ -1,0 +1,92 @@
+**Reasoning:**
+
+1. **Decision Variables**: I need to decide which scientists are assigned to which teams in which weeks. I'll use a 3D binary variable `team[w,t,s]` where `w` is the week, `t` is the team number, and `s` is the scientist ID. This variable is 1 if scientist `s` is in team `t` during week `w`, and 0 otherwise.
+
+2. **Problem Parameters**: 
+   - 32 scientists total (8 from each of 4 research areas A, B, C, D)
+   - Teams of size 4
+   - 8 teams per week (32 scientists ÷ 4 scientists per team)
+   - Scientists numbered 1-8 (area A), 9-16 (area B), 17-24 (area C), 25-32 (area D)
+
+3. **Core Constraints**:
+   - Each team must have exactly 4 scientists
+   - Each scientist must be in exactly one team per week
+   - No two scientists can work together more than once across all weeks
+   - Ideally, each team should have one scientist from each research area (interdisciplinary constraint)
+
+4. **Objective**: Maximize the number of weeks while satisfying all constraints. This is a constraint satisfaction problem where we want to find the maximum feasible number of weeks.
+
+5. **Key Insight**: The "no two scientists work together twice" constraint is the most restrictive. Each scientist can work with at most 3 other scientists per week, and there are 31 other scientists total. So theoretically, a scientist could work for at most 31÷3 ≈ 10 weeks, but practical constraints will likely reduce this significantly.
+
+6. **Modeling Approach**: I'll model this as a satisfaction problem for a given number of weeks, then we can search for the maximum feasible number of weeks. The interdisciplinary constraint will be a soft constraint (preferred but not required) since it might conflict with the no-repeat constraint.
+
+**MiniZinc model:**
+
+```minizinc
+% Parameters
+int: num_scientists = 32;
+int: team_size = 4;
+int: teams_per_week = num_scientists div team_size;  % 8 teams per week
+int: num_areas = 4;
+int: scientists_per_area = num_scientists div num_areas;  % 8 scientists per area
+
+% Decision: number of weeks to schedule (we'll try to maximize this)
+int: num_weeks;
+
+% Decision variables: team[w,t,s] = 1 if scientist s is in team t in week w
+array[1..num_weeks, 1..teams_per_week, 1..num_scientists] of var 0..1: team;
+
+% Helper function to get research area of scientist s
+function int: get_area(int: s) = ((s-1) div scientists_per_area) + 1;
+
+% Constraint 1: Each team has exactly 4 scientists
+constraint forall(w in 1..num_weeks, t in 1..teams_per_week) (
+    sum(s in 1..num_scientists) (team[w,t,s]) = team_size
+);
+
+% Constraint 2: Each scientist is in exactly one team per week
+constraint forall(w in 1..num_weeks, s in 1..num_scientists) (
+    sum(t in 1..teams_per_week) (team[w,t,s]) = 1
+);
+
+% Constraint 3: No two scientists work together more than once
+constraint forall(s1, s2 in 1..num_scientists where s1 < s2) (
+    sum(w in 1..num_weeks, t in 1..teams_per_week) (
+        team[w,t,s1] * team[w,t,s2]
+    ) <= 1
+);
+
+% Soft constraint: Prefer interdisciplinary teams (one from each area)
+% We'll count how many teams achieve perfect interdisciplinary composition
+var int: interdisciplinary_teams = sum(w in 1..num_weeks, t in 1..teams_per_week) (
+    bool2int(
+        forall(area in 1..num_areas) (
+            sum(s in 1..num_scientists where get_area(s) = area) (team[w,t,s]) = 1
+        )
+    )
+);
+
+% Objective: Maximize interdisciplinary teams (as a secondary goal)
+solve maximize interdisciplinary_teams;
+
+% Output formatting
+output [
+    "Number of weeks: " ++ show(num_weeks) ++ "\n" ++
+    "Interdisciplinary teams: " ++ show(interdisciplinary_teams) ++ 
+    " out of " ++ show(num_weeks * teams_per_week) ++ "\n\n"
+] ++
+[
+    "Week " ++ show(w) ++ ":\n" ++
+    concat([
+        "  Team " ++ show(t) ++ ": [" ++
+        concat([
+            if team[w,t,s] = 1 then show(s) ++ "(area " ++ show(get_area(s)) ++ ") " else "" endif
+            | s in 1..num_scientists
+        ]) ++ "]\n"
+        | t in 1..teams_per_week
+    ]) ++ "\n"
+    | w in 1..num_weeks
+];
+```
+
+Note: To find the maximum number of weeks, you would need to run this model with increasing values of `num_weeks` (starting from 1) until no solution is found. The last feasible value would be the maximum. Alternatively, you could use a binary search approach or modify the model to include `num_weeks` as a decision variable with an upper bound.

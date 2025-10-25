@@ -1,0 +1,77 @@
+**Reasoning:**
+
+1. **Decision Variables:**
+   - Positions of beacons: We need variables for the position of each beacon along the path
+   - Types of beacons: We need variables to assign a type to each beacon
+
+2. **Variable Domains:**
+   - Beacon positions: Non-negative integers, with the first beacon fixed at position 0
+   - Beacon types: Integer values representing different beacon types (each with different costs and ranges)
+
+3. **Key Constraints:**
+   - First beacon must be at position 0
+   - All pairwise distances between beacons must be unique (no two pairs can have the same distance)
+   - Beacons must be ordered along the path (positions should be non-decreasing)
+
+4. **Objective Function:**
+   - This is an optimization problem where we want to minimize the total path length (position of the last beacon)
+   - We also want to minimize beacon costs, but the problem emphasizes minimizing path length as the primary concern
+
+5. **Modeling Choices:**
+   - We'll use integer positions for simplicity
+   - We'll need to define beacon types with associated costs and ranges
+   - The unique distance constraint is the most complex - we need to ensure all pairwise distances are different
+   - We can set reasonable upper bounds on positions to make the problem tractable
+
+6. **Additional Considerations:**
+   - The problem mentions beacon ranges and efficiency, but doesn't specify exact constraints on coverage
+   - We'll model this as a cost minimization with the unique distance constraint as the primary structural requirement
+
+**MiniZinc model:**
+
+```minizinc
+% Signal Beacon Placement Problem
+% Minimize path length while ensuring unique pairwise distances
+
+% Parameters
+int: m;  % number of beacons
+int: max_pos = m * m;  % upper bound on positions
+int: num_types = 3;  % number of beacon types
+
+% Beacon type costs (higher type = higher cost but better range)
+array[1..num_types] of int: beacon_cost = [1, 3, 5];
+
+% Decision variables
+array[1..m] of var 0..max_pos: pos;  % positions of beacons
+array[1..m] of var 1..num_types: beacon_type;  % type of each beacon
+
+% Constraints
+
+% First beacon at position 0
+constraint pos[1] = 0;
+
+% Beacons must be ordered (non-decreasing positions)
+constraint forall(i in 1..m-1)(pos[i] <= pos[i+1]);
+
+% All pairwise distances must be unique
+constraint forall(i, j, k, l in 1..m where i < j /\ k < l /\ (i != k \/ j != l))(
+    pos[j] - pos[i] != pos[l] - pos[k]
+);
+
+% Optional: ensure beacons are not all at the same position (except first)
+constraint forall(i in 2..m)(pos[i] > 0);
+
+% Objective: minimize total path length (last beacon position) plus beacon costs
+var int: total_cost = pos[m] + sum(i in 1..m)(beacon_cost[beacon_type[i]]);
+
+solve minimize total_cost;
+
+% Output
+output [
+    "Beacon positions: " ++ show(pos) ++ "\n" ++
+    "Beacon types: " ++ show(beacon_type) ++ "\n" ++
+    "Path length: " ++ show(pos[m]) ++ "\n" ++
+    "Total beacon cost: " ++ show(sum(i in 1..m)(beacon_cost[beacon_type[i]])) ++ "\n" ++
+    "Total cost: " ++ show(total_cost) ++ "\n"
+];
+```

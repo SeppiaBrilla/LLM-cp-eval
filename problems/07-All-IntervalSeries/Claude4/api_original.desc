@@ -1,0 +1,56 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need a sequence of n pitch classes, so we have variables s₁, s₂, ..., sₙ where each sᵢ represents a pitch class (0 to n-1).
+
+2. **Domains**: Each sᵢ has domain {0, 1, ..., n-1} since we're working with pitch classes modulo n.
+
+3. **Constraints**:
+   - **Permutation constraint**: The sequence s = (s₁, s₂, ..., sₙ) must be a permutation of {0, 1, ..., n-1}, meaning each pitch class appears exactly once.
+   - **Interval constraint**: The intervals between consecutive notes must form a permutation of {1, 2, ..., n-1}. The interval between sᵢ and sᵢ₊₁ is |sᵢ₊₁ - sᵢ| mod n, but since we want the absolute difference, we need to be careful about the modular arithmetic.
+
+4. **Interval Calculation**: For the interval between two pitch classes a and b in Z_n, we need min(|b-a|, n-|b-a|) to get the shortest distance around the circle. However, looking at the problem statement more carefully, it seems we want |sᵢ₊₁ - sᵢ| as regular absolute difference, not modular distance.
+
+5. **Objective**: This is a constraint satisfaction problem - we just need to find any solution that satisfies the constraints.
+
+6. **Problem Size**: The problem asks for n=12 (twelve pitch classes), but the general formulation works for any n.
+
+7. **Additional Considerations**: We have n-1 intervals between n consecutive notes, and we need these to be a permutation of {1, 2, ..., n-1}, which has exactly n-1 elements, so the sizes match perfectly.
+
+**MiniZinc model:**
+
+```minizinc
+% All-Interval Series Problem
+% Find a permutation of pitch classes 0..n-1 such that
+% the intervals between consecutive notes form a permutation of 1..n-1
+
+int: n = 12; % Size of the problem (12 for standard pitch classes)
+
+% Decision variables: the series of pitch classes
+array[1..n] of var 0..n-1: s;
+
+% Auxiliary variables: the intervals between consecutive notes
+array[1..n-1] of var 1..n-1: intervals;
+
+% Constraint 1: s must be a permutation of 0..n-1
+constraint alldifferent(s);
+
+% Constraint 2: Calculate intervals between consecutive notes
+constraint forall(i in 1..n-1) (
+    intervals[i] = abs(s[i+1] - s[i])
+);
+
+% Constraint 3: intervals must be a permutation of 1..n-1
+constraint alldifferent(intervals);
+
+% Symmetry breaking: fix first element to reduce search space
+constraint s[1] = 0;
+
+% Solve the constraint satisfaction problem
+solve satisfy;
+
+% Output the solution
+output [
+    "Pitch class series: " ++ show(s) ++ "\n" ++
+    "Intervals: " ++ show(intervals) ++ "\n"
+];
+```

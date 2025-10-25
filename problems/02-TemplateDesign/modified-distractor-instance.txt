@@ -1,0 +1,9 @@
+int: n_variations = 2;                    % Number of different panel variations
+int: max_frames = 20;                      % Maximum number of frames available
+int: max_panels_per_frame = 2;           % Maximum panels that can fit on one frame
+
+array[1..n_variations] of int: demand = [5, 5];  % Demand for each variation
+
+% Incompatibility matrix: incompatible[i,j] = true if variations i and j cannot be on same frame
+array[1..n_variations, 1..n_variations] of bool: incompatible = [|false, false |
+                                                                 false, false|];

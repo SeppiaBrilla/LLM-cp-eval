@@ -1,0 +1,102 @@
+**Reasoning:**
+
+1. **Decision Variables:**
+   - We need to assign agents to locations and time periods
+   - Each agent must visit exactly one location in each zone
+   - We need to track which visits occur in weeks 1-2 vs weeks 3-4
+   - We need to ensure officers get the right number of visits in each time period
+
+2. **Key Parameters:**
+   - 4 zones with locations: Zone 1 (1-5), Zone 2 (6-10), Zone 3 (11-15), Zone 4 (16-19)
+   - 40 agents total (4 groups of 10)
+   - 35 officers total across all locations (1-4 officers per location)
+   - Each officer gets 4 visits total (2 in weeks 1-2, 2 in weeks 3-4)
+   - Total visits = 140
+
+3. **Decision Variables Needed:**
+   - `visit[agent, location, period]`: binary variable indicating if agent visits location in time period
+   - `officers[location]`: number of officers at each location (1-4)
+   - We need to ensure agents visit exactly one location per zone per period
+
+4. **Constraints:**
+   - Each agent visits exactly one location in each zone over the 4 weeks
+   - Each location's officers receive correct number of visits in each period
+   - Total officers across all locations = 35
+   - Officers at each location between 1-4
+   - Each officer gets 2 visits in weeks 1-2 and 2 visits in weeks 3-4
+   - Workload should be balanced among agents
+
+5. **Modeling Approach:**
+   - Use 2 time periods: period 1 (weeks 1-2) and period 2 (weeks 3-4)
+   - Each agent must visit one location per zone per period
+   - Track visits to ensure officer visit requirements are met
+
+**MiniZinc model:**
+
+```minizinc
+% Police Officer Observation Scheduling Problem
+
+% Parameters
+int: num_agents = 40;
+int: num_zones = 4;
+int: num_periods = 2; % Period 1: weeks 1-2, Period 2: weeks 3-4
+int: total_officers = 35;
+int: visits_per_officer_per_period = 2;
+
+% Zone boundaries
+array[1..4, 1..2] of int: zone_bounds = [|1,5|6,10|11,15|16,19|];
+int: total_locations = 19;
+
+% Decision variables
+% Number of officers at each location (1-4 per location)
+array[1..total_locations] of var 1..4: officers;
+
+% visit[a,l,p] = 1 if agent a visits location l in period p
+array[1..num_agents, 1..total_locations, 1..num_periods] of var 0..1: visit;
+
+% Constraints
+
+% Total officers across all locations must equal 35
+constraint sum(l in 1..total_locations)(officers[l]) = total_officers;
+
+% Each agent must visit exactly one location in each zone in each period
+constraint forall(a in 1..num_agents, z in 1..num_zones, p in 1..num_periods)(
+    sum(l in zone_bounds[z,1]..zone_bounds[z,2])(visit[a,l,p]) = 1
+);
+
+% Each officer at each location gets exactly 2 visits per period
+constraint forall(l in 1..total_locations, p in 1..num_periods)(
+    sum(a in 1..num_agents)(visit[a,l,p]) = officers[l] * visits_per_officer_per_period
+);
+
+% Workload balancing: each agent should have similar total visits
+% Each agent visits 4 locations total (1 per zone per period)
+constraint forall(a in 1..num_agents)(
+    sum(l in 1..total_locations, p in 1..num_periods)(visit[a,l,p]) = 4
+);
+
+% Symmetry breaking: order agents within groups
+constraint forall(a in 1..num_agents-1)(
+    lex_lesseq([visit[a,l,p] | l in 1..total_locations, p in 1..num_periods],
+               [visit[a+1,l,p] | l in 1..total_locations, p in 1..num_periods])
+);
+
+% Output formatting
+output [
+    "Officers per location:\n"
+] ++
+[
+    "Location " ++ show(l) ++ ": " ++ show(officers[l]) ++ " officers\n"
+    | l in 1..total_locations
+] ++
+[
+    "\nAgent assignments (Agent -> Location visits per period):\n"
+] ++
+[
+    "Agent " ++ show(a) ++ " Period " ++ show(p) ++ ": " ++ 
+    show([l | l in 1..total_locations where visit[a,l,p] = 1]) ++ "\n"
+    | a in 1..num_agents, p in 1..num_periods
+];
+
+solve satisfy;
+```

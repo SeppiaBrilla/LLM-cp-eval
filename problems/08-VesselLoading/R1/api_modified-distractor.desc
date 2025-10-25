@@ -1,0 +1,104 @@
+### Reasoning
+
+1. **Problem Analysis**: The problem involves placing rectangular artworks in a rectangular gallery without overlap, while respecting category-based distance rules and reserved spaces. The primary goal is to decide if such an arrangement is possible, with an optional secondary goal of optimizing aesthetic impact by placing striking artworks near entrance and windows. However, since the problem explicitly states "decide whether all artworks can be arranged," we focus on modeling the satisfaction problem first.
+
+2. **Key Components**:
+   - **Gallery Dimensions**: Width `W` and height `H`.
+   - **Artworks**: Each has width `w_i`, height `h_i`, and category `c_i`. There are `N` artworks.
+   - **Categories**: There are `C` categories, each artwork belongs to one category.
+   - **Distance Rules**: For some pairs of categories, there is a minimum horizontal distance `d_h` and/or vertical distance `d_v` required between artworks of those categories. The rule is disjunctive: for each such pair, either the horizontal separation must be at least `d_h` or the vertical separation must be at least `d_v`.
+   - **Reserved Spaces**: Rectangular areas where artworks cannot be placed. Each reserved space has position `(x_r, y_r)` and dimensions `(w_r, h_r)`.
+   - **Aesthetic Impact**: While mentioned, optimization for impact is not required for the decision problem. It can be added later if needed.
+
+3. **Decision Variables**:
+   - For each artwork `i`, define `x[i]` and `y[i]` as the bottom-left corner coordinates. Domains are constrained to ensure the artwork fits within the gallery: `0 <= x[i] <= W - w[i]` and `0 <= y[i] <= H - h[i]`.
+
+4. **Constraints**:
+   - **Within Gallery**: Each artwork must be fully inside the gallery.
+   - **No Overlap**: For any two distinct artworks, their rectangles must not overlap. This is enforced by ensuring that for each pair, one is to the left, right, above, or below the other.
+   - **Distance Rules**: For each distance rule between categories `c1` and `c2`, and for every pair of artworks `i` and `j` (where `i != j`) with categories `c1` and `c2`, either the horizontal separation is at least `d_h` or the vertical separation is at least `d_v`. Separation is computed based on the edges of the rectangles.
+   - **Reserved Spaces**: No artwork can overlap with any reserved rectangle. This is enforced by ensuring that for each artwork and reserved rectangle, the artwork is entirely left, right, above, or below the reserved rectangle.
+
+5. **Modeling Choices**:
+   - Coordinates are integer-based for simplicity, assuming the gallery dimensions and artwork sizes are integers.
+   - Distance rules are modeled as a set of rules, each specifying two categories and the required horizontal and vertical distances.
+   - The disjunctive nature of distance rules is captured using logical OR constraints.
+   - Reserved spaces are modeled as fixed rectangles.
+
+6. **Optimization**: Since the problem is primarily about decision, we use `solve satisfy;`. If aesthetic impact optimization is needed later, it can be incorporated by defining objective functions based on distances to entrance and windows, but this requires additional parameters not provided.
+
+### MiniZinc Model
+
+```minizinc
+% Gallery dimensions
+int: W;
+int: H;
+
+% Number of artworks
+int: N;
+
+% Artwork dimensions and categories
+array[1..N] of int: w;
+array[1..N] of int: h;
+array[1..N] of int: category;
+int: C; % Number of categories
+
+% Distance rules
+int: M; % Number of distance rules
+array[1..M] of int: c1; % First category for each rule
+array[1..M] of int: c2; % Second category for each rule
+array[1..M] of int: d_h; % Minimum horizontal distance for each rule
+array[1..M] of int: d_v; % Minimum vertical distance for each rule
+
+% Reserved spaces
+int: R; % Number of reserved rectangles
+array[1..R] of int: x_r; % x coordinate of reserved rectangle
+array[1..R] of int: y_r; % y coordinate of reserved rectangle
+array[1..R] of int: w_r; % width of reserved rectangle
+array[1..R] of int: h_r; % height of reserved rectangle
+
+% Decision variables: positions of artworks
+array[1..N] of var int: x;
+array[1..N] of var int: y;
+
+% Constraints
+
+% Each artwork must be within the gallery
+constraint forall(i in 1..N) (
+    x[i] >= 0 /\ x[i] <= W - w[i] /\
+    y[i] >= 0 /\ y[i] <= H - h[i]
+);
+
+% No overlap between any two distinct artworks
+constraint forall(i, j in 1..N where i < j) (
+    (x[i] + w[i] <= x[j]) \/
+    (x[j] + w[j] <= x[i]) \/
+    (y[i] + h[i] <= y[j]) \/
+    (y[j] + h[j] <= y[i])
+);
+
+% No artwork overlaps with any reserved space
+constraint forall(i in 1..N, k in 1..R) (
+    (x[i] >= x_r[k] + w_r[k]) \/
+    (x[i] + w[i] <= x_r[k]) \/
+    (y[i] >= y_r[k] + h_r[k]) \/
+    (y[i] + h[i] <= y_r[k])
+);
+
+% Distance rules: for each rule and relevant artwork pairs, ensure horizontal or vertical separation
+constraint forall(r in 1..M, i, j in 1..N where category[i] == c1[r] /\ category[j] == c2[r] /\ i != j) (
+    (x[i] >= x[j] + w[j] + d_h[r]) \/
+    (x[j] >= x[i] + w[i] + d_h[r]) \/
+    (y[i] >= y[j] + h[j] + d_v[r]) \/
+    (y[j] >= y[i] + h[i] + d_v[r])
+);
+
+% Solve for satisfaction
+solve satisfy;
+
+% Output: if a solution exists, positions can be printed
+output ["Arrangement possible? ", show(satisfied), "\n"] ++
+       [ "Artwork ", show(i), ": (", show(x[i]), ", ", show(y[i]), ")\n" | i in 1..N ];
+```
+
+This model checks if an arrangement exists that satisfies all constraints. The output indicates whether a solution is found and provides the positions of artworks if so. Note that the aesthetic impact optimization is not included, as per the focus on the decision problem.

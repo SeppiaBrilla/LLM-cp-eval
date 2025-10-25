@@ -1,0 +1,47 @@
+Reasoning:
+
+1. Decision Variables:
+   - The decision variable is the sequence of DNA samples to be processed. This can be represented as an array `s` of size `n`, where `s[i]` represents the `i-th` sample to be processed.
+
+2. Domains:
+   - The domain of each element in the sequence `s` is from `0` to `n-1`, as each sample is labeled from `0` to `n-1`.
+
+3. Constraints:
+   - Unique Processing: Each DNA sample must be processed exactly once. This can be represented as an `all_different` constraint on the sequence `s`.
+   - Unique Differences: The difference in base-pair counts between consecutive samples must be unique, covering all possible differences from `1` to `n-1`. This can be represented as an `all_different` constraint on the absolute differences between consecutive samples in the sequence `s`.
+
+4. This is a satisfaction problem as we are looking for a sequence that satisfies the given constraints, and there is no objective function to optimize.
+
+5. Potential Simplifications or Modeling Choices:
+   - To calculate the absolute differences between consecutive samples, we can use a loop to iterate over the sequence `s` and calculate the absolute difference between `s[i]` and `s[i-1]` for each `i` from `1` to `n-1`.
+   - To ensure that the differences are unique and cover all possible differences from `1` to `n-1`, we can use an array `diff` of size `n-1`, where `diff[i]` represents the absolute difference between `s[i+1]` and `s[i]`. We can then apply the `all_different` constraint on `diff` and ensure that each element in `diff` is between `1` and `n-1`.
+
+MiniZinc model:
+
+```minizinc
+include "globals.mzn";
+
+% number of DNA samples
+int: n;
+
+% sequence of DNA samples to be processed
+array[0..n-1] of var 0..n-1: s;
+
+% absolute differences between consecutive samples
+array[1..n-1] of var 1..n-1: diff;
+
+% each DNA sample must be processed exactly once
+constraint alldifferent(s);
+
+% calculate the absolute differences between consecutive samples
+constraint forall(i in 1..n-1) (
+  diff[i] = abs(s[i] - s[i-1])
+);
+
+% the differences must be unique and cover all possible differences from 1 to n-1
+constraint alldifferent(diff);
+
+solve satisfy;
+```
+
+This model will find a sequence of DNA samples to be processed that satisfies the given constraints. If no such sequence exists, it will return unsatisfiable.

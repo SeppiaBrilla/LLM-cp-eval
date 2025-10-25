@@ -1,0 +1,55 @@
+**Reasoning:**
+
+1. **Problem Understanding:** We have \(m\) drones, \(m\) zones, and \(m\) time slots. The schedule is an \(m \times m\) matrix where rows represent drones, columns represent zones, and entries represent time slots. This matrix must be a Latin square, meaning each row and each column contains each time slot exactly once.
+
+2. **DS1 Condition:** The DS1 schedule requires that for all drones \(a, c\) and zones \(b, d\), if \(L(a,b) = L(c,d)\) and \(M(a,b) = M(c,d)\), then \(a = c\) and \(b = d\), where \(L\) is the Latin square and \(M\) is the row-inverse Latin square defined by \(M(a,b) = d\) such that \(L(d,b) = a\). This is equivalent to the map \((a,b) \to (L(a,b), M(a,b))\) being injective.
+
+3. **Simplification:** The injectivity condition can be rewritten as: for each drone \(d\) and time slot \(v\), there is exactly one zone \(b\) such that \(L(L(d,b), b) = v\). This means that for each drone \(d\), the function \(f_d(b) = L(L(d,b), b)\) must be a permutation of the time slots.
+
+4. **Modeling Approach:** We need to find a Latin square \(L\) of order \(m\) such that for each drone \(d\), the values \(L(L(d,b), b)\) for \(b = 1\) to \(m\) are all distinct. This ensures the DS1 condition is satisfied.
+
+5. **Variables and Domains:** The decision variable is a 2D array `L` of size \(m \times m\), where `L[i,j]` represents the time slot for drone \(i\) and zone \(j\). Each entry is in the range \(1\) to \(m\).
+
+6. **Constraints:**
+   - **Latin Square Constraints:** Each row and each column of `L` must contain all time slots from \(1\) to \(m\) exactly once.
+   - **DS1 Constraints:** For each drone \(d\), the values `L[ L[d,b], b ]` for all zones \(b\) must be all different. This is enforced by requiring that for each \(d\), the array `[ L[ L[d,b], b ] | b in 1..m ]` is a permutation of \(1..m\).
+
+7. **Objective:** This is a satisfaction problem; we need to find such a Latin square if it exists.
+
+**MiniZinc Model:**
+
+```minizinc
+% Model for DS1 delivery schedule
+% Parameters
+int: m; % Number of drones, zones, and time slots
+
+% Decision variable: L[i,j] is the time slot when drone i delivers to zone j
+array[1..m, 1..m] of var 1..m: L;
+
+% Constraints
+
+% Each row must contain all time slots exactly once (Latin square row constraint)
+constraint forall(i in 1..m) (
+    all_different([L[i,j] | j in 1..m])
+);
+
+% Each column must contain all time slots exactly once (Latin square column constraint)
+constraint forall(j in 1..m) (
+    all_different([L[i,j] | i in 1..m])
+);
+
+% DS1 condition: for each drone d, the values L[ L[d,b], b ] for all b must be all different
+constraint forall(d in 1..m) (
+    all_different([L[ L[d,b], b ] | b in 1..m])
+);
+
+% Solve statement: find a valid assignment
+solve satisfy;
+
+% Output the matrix in a readable format
+output [
+    if j == 1 then "\n" else "" endif ++
+    show(L[i,j]) ++ " "
+    | i in 1..m, j in 1..m
+];
+```

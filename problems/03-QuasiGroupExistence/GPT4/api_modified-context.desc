@@ -1,0 +1,47 @@
+Reasoning:
+
+1. The problem is a scheduling problem where we need to assign drones to zones in different time slots. The problem can be modeled as a constraint satisfaction problem (CSP) where the decision variables are the time slots assigned to each drone for each zone.
+
+2. The decision variables are the time slots assigned to each drone for each zone. We can represent this as a 2D array `schedule` of size `m x m` where `schedule[i][j]` represents the time slot assigned to drone `i` for zone `j`.
+
+3. The domain of the decision variables is the set of all time slots, which is `{1, 2, ..., m}`.
+
+4. The constraints of the problem are:
+   - Each drone uses every time slot exactly once. This means that for each row in the `schedule` array, all elements must be different.
+   - Each delivery zone receives one delivery in every time slot. This means that for each column in the `schedule` array, all elements must be different.
+   - If `a * b = c`, `a * b = c * d` and `a *321 b = c *321 d`, then `a = c` and `b = d`. This means that for any two different pairs `(i, j)` and `(k, l)` in the `schedule` array, if `schedule[i][j] = schedule[k][l]`, `schedule[i][j] = schedule[schedule[k][l]][l]` and `schedule[i][schedule[k][l]] = schedule[schedule[k][l]][l]`, then `i = k` and `j = l`.
+
+5. There is no objective function in this problem as it is a satisfaction problem.
+
+6. There are no potential simplifications or modeling choices to prefer.
+
+MiniZinc model:
+
+```minizinc
+include "globals.mzn";
+
+% Number of drones and zones
+int: m;
+
+% Decision variables
+array[1..m, 1..m] of var 1..m: schedule;
+
+% Each drone uses every time slot exactly once
+constraint forall(i in 1..m)(alldifferent([schedule[i, j] | j in 1..m]));
+
+% Each delivery zone receives one delivery in every time slot
+constraint forall(j in 1..m)(alldifferent([schedule[i, j] | i in 1..m]));
+
+% If a * b = c, a * b = c * d and a *321 b = c *321 d, then a = c and b = d
+constraint forall(i in 1..m, j in 1..m, k in i+1..m, l in 1..m)(
+  if schedule[i, j] = schedule[k, l] /\ schedule[i, j] = schedule[schedule[k, l], l] /\ schedule[i, schedule[k, l]] = schedule[schedule[k, l], l] then
+    i = k /\ j = l
+  else
+    true
+  endif
+);
+
+solve satisfy;
+```
+
+This model represents the problem as a CSP and uses the `alldifferent` global constraint to ensure that each drone uses every time slot exactly once and each delivery zone receives one delivery in every time slot. The third constraint is encoded as a conditional constraint that checks the condition `a * b = c`, `a * b = c * d` and `a *321 b = c *321 d` for all pairs of drones and zones. If the condition is true, it enforces that the drones and zones must be the same. The model then solves the problem by finding a satisfying assignment for the `schedule` array.

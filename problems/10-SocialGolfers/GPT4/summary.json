@@ -9,5 +9,10 @@
         "globals": true,
         "correctProblem": false
     },
+    "modified-distractor":{
+        "runs":false,
+        "globals":true,
+        "correctProblem":false
+    },
     "similar": true
 }

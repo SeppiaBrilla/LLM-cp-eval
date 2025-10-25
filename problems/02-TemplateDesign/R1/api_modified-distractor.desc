@@ -1,0 +1,92 @@
+**Reasoning:**
+
+1. **Problem Analysis**: The company needs to produce panels of different variations to meet specific demands, using master sheets with fixed capacity. Each master sheet uses a frame that defines the arrangement of variations. The goal is to minimize the number of unique frames (distinct layouts) while satisfying the demand for each variation.
+
+2. **Key Elements**:
+   - **Variations**: There are V variations, each with a demand Q_i.
+   - **Master Sheet Capacity**: Each master sheet can hold up to C panels, all of the same size.
+   - **Frames**: Each frame defines a unique composition of variations (how many of each variation per sheet). The number of unique frames K should be minimized.
+   - **Usage**: Each frame can be used on multiple master sheets (N_j times).
+   - **Constraints**: 
+     - Demand must be met for each variation.
+     - The total panels per frame cannot exceed C.
+     - Used frames must have distinct compositions to ensure uniqueness.
+   - **Infeasible Arrangements**: The problem mentions that some arrangements may not be feasible due to misalignment, but no specific constraints are provided. Thus, the model assumes any composition with total panels ≤ C is feasible. Additional constraints can be added if needed.
+
+3. **Modeling Decisions**:
+   - **Variables**: 
+     - Let M be the maximum number of unique frames, set to V (number of variations) since we cannot have more unique frames than variations.
+     - For each frame j (1..M), define:
+       - A_j[i]: number of panels of variation i on frame j (0 ≤ A_j[i] ≤ C).
+       - N_j: number of master sheets using frame j (integer ≥ 0).
+       - U_j: binary indicator if frame j is used (N_j > 0).
+   - **Constraints**:
+     - Demand: For each variation i, the sum over frames of A_j[i] * N_j must be at least Q_i.
+     - Capacity: For each frame j, the sum of A_j[i] over i must be ≤ C.
+     - Distinctness: For any two used frames (U_j and U_k true), their compositions A_j and A_k must differ in at least one variation.
+   - **Objective**: Minimize the number of used frames (sum of U_j).
+
+4. **Assumptions**:
+   - All panels are identical in size, so capacity C is fixed per sheet.
+   - Any composition of variations is feasible as long as the total panels ≤ C. If specific feasibility constraints exist (e.g., certain variations cannot be mixed), they can be added to the model.
+   - The number of unique frames K is at most V, so M = V is a safe upper bound.
+
+5. **Output**: The solution will show the number of unique frames and, for each used frame, its composition and how many times it is used.
+
+**MiniZinc Model:**
+```minizinc
+% Parameters
+int: V; % Number of variations
+array[1..V] of int: Q; % Demand for each variation
+int: C; % Capacity of each master sheet (max panels per sheet)
+int: M = V; % Maximum number of unique frames (set to V)
+
+% Derived parameter: total demand to bound N_j
+int: total_demand = sum(Q);
+
+% Variables
+array[1..M] of var 0..total_demand: N; % Number of sheets per frame type
+array[1..M, 1..V] of var 0..C: A; % A[j,i] = panels of variation i on frame j
+array[1..M] of var bool: U; % U[j] = true if frame j is used
+
+% Constraints
+% Demand must be satisfied for each variation
+constraint forall(i in 1..V) (
+    sum(j in 1..M) (A[j,i] * N[j]) >= Q[i]
+);
+
+% Capacity constraint: each frame can have at most C panels
+constraint forall(j in 1..M) (
+    sum(i in 1..V) (A[j,i]) <= C
+);
+
+% Define U[j]: true if N[j] > 0
+constraint forall(j in 1..M) (
+    U[j] == (N[j] > 0)
+);
+
+% Used frames must have distinct compositions
+constraint forall(j, k in 1..M where j < k) (
+    not (U[j] and U[k]) or (sum(i in 1..V) (A[j,i] != A[k,i]) >= 1)
+);
+
+% Objective: minimize the number of unique frames
+solve minimize sum(U);
+
+% Output
+output [
+    "Number of unique frames: " ++ show(sum(U)) ++ "\n"
+] ++ [
+    if U[j] then
+        "Frame " ++ show(j) ++ ": used " ++ show(N[j]) ++ " times, composition: " ++ 
+        show([A[j,i] | i in 1..V]) ++ "\n"
+    else
+        ""
+    endif | j in 1..M
+];
+
+% Note: If there are feasibility constraints on arrangements (e.g., certain variations cannot be mixed),
+% additional constraints can be added here. For example:
+%   constraint forall(j in 1..M) ( ... );
+% But since no specific constraints are given, they are not included.
+```

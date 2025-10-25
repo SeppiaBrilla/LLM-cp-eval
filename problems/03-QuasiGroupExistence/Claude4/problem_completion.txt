@@ -1,0 +1,6 @@
+An order m quasigroup is a Latin square of size m. That is, a m x m multiplication table in which each element occurs once in every row and column. For example,
+1    2   3   4
+4    1   2   3
+3    4   1   2
+2    3   4   1
+is an order 4 quasigroup. A quasigroup can be specified by a set and a binary multiplication operator, * defined over this set. Quasigroup existence problems determine whether a quasigroup of a given order exists that satisfies certain additional constraints or properties.

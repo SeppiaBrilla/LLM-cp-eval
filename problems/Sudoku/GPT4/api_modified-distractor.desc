@@ -1,0 +1,45 @@
+Reasoning:
+
+1. **Decision Variables**: The decision variables are the cells of the chess board. Each cell can contain a queen of a certain garment or be empty. We can represent the board as a 2D array of size n x n, where n is the size of the board. Each cell can take a value from 0 to m, where m is the number of different garments plus one (0 represents an empty cell, 1 represents a queen with the first garment, 2 represents a queen with the second garment, and so on).
+
+2. **Domains**: The domain of each cell is from 0 to m, where m is the number of different garments plus one.
+
+3. **Constraints**: The constraints are as follows:
+   - Pre-filled spots: Some cells already have a queen of a certain garment. These cells should keep their initial values.
+   - No attacks: No two queens of the same garment can attack each other. This means that in each row, column, and block, there can be at most one queen of each garment.
+   
+4. **Objective Function**: The objective is to maximize the number of queens on the board. This can be achieved by maximizing the sum of all cells (since 0 represents an empty cell and a positive number represents a queen).
+
+5. **Simplifications or Modeling Choices**: We can simplify the problem by treating each garment as a separate problem. For each garment, we solve a standard n-queens problem, where we try to place as many queens as possible without them attacking each other. Then, we combine the solutions for all garments to get the final solution.
+
+MiniZinc model:
+
+```minizinc
+% Define the size of the board and the number of garments
+int: n = 9;
+int: m = 3; % for example, if there are 3 different garments
+
+% Define the board
+array[1..n, 1..n] of var 0..m: board;
+
+% Define the pre-filled spots
+% For example, if cell[3,6] = 2 (blue queen)
+constraint board[3,6] = 2;
+
+% No two queens of the same garment can attack each other
+constraint forall(i in 1..n, j in 1..n, g in 1..m) (
+  % Row
+  sum(k in 1..n) (bool2int(board[i,k] = g)) <= 1
+  /\
+  % Column
+  sum(k in 1..n) (bool2int(board[k,j] = g)) <= 1
+  /\
+  % Block
+  sum(k in (i div 3)*3+1..(i div 3)*3+3, l in (j div 3)*3+1..(j div 3)*3+3) (bool2int(board[k,l] = g)) <= 1
+);
+
+% Maximize the number of queens
+solve maximize sum(i in 1..n, j in 1..n) (bool2int(board[i,j] > 0));
+```
+
+This model assumes that the board is 9x9 and there are 3 different garments. The pre-filled spots are represented as constraints. The model ensures that no two queens of the same garment can attack each other by adding constraints for each row, column, and block. The objective is to maximize the number of queens on the board.

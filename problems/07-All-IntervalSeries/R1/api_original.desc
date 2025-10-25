@@ -1,0 +1,47 @@
+**Reasoning:**
+
+1. **Problem Analysis**: The all-interval series problem requires finding a sequence of length \(n\) where each element from \(0\) to \(n-1\) appears exactly once, and the absolute differences between consecutive elements form a permutation of \(\{1, 2, \dots, n-1\}\). For \(n=12\), this corresponds to the musical pitch-class problem described.
+
+2. **Decision Variables**:
+   - Let \(s\) be an array of \(n\) variables, each representing a pitch-class in the sequence, with domain \(0\) to \(n-1\).
+   - Let \(d\) be an array of \(n-1\) variables, each representing the interval between consecutive pitch-classes, with domain \(1\) to \(n-1\).
+
+3. **Constraints**:
+   - The sequence \(s\) must be a permutation of \(\{0, 1, \dots, n-1\}\), enforced by an `all_different` constraint on \(s\).
+   - Each interval \(d[i]\) must equal the absolute difference between \(s[i]\) and \(s[i+1]\) for \(i\) from 1 to \(n-1\).
+   - The intervals \(d\) must all be distinct, enforced by an `all_different` constraint on \(d\).
+
+4. **Problem Type**: This is a constraint satisfaction problem (no optimization objective is required).
+
+5. **Modeling Choices**:
+   - The model is parameterized by \(n\) to allow generalization, but \(n=12\) is used here.
+   - Absolute differences are computed using MiniZinc's `abs` function.
+   - No symmetry breaking is applied, as the problem is small enough for \(n=12\) to be solved efficiently.
+
+**MiniZinc Model:**
+
+```minizinc
+% All-Interval Series Problem
+% Parameter n: size of the series (e.g., n=12 for pitch-classes)
+int: n = 12;
+
+% Decision variables:
+% s: sequence of pitch-classes (permutation of 0..n-1)
+array[1..n] of var 0..n-1: s;
+% d: intervals between consecutive elements (permutation of 1..n-1)
+array[1..n-1] of var 1..n-1: d;
+
+% Constraints:
+% s must be a permutation of 0..n-1
+constraint all_different(s);
+% Each d[i] is the absolute difference between s[i] and s[i+1]
+constraint forall(i in 1..n-1) (d[i] == abs(s[i] - s[i+1]));
+% d must be a permutation of 1..n-1
+constraint all_different(d);
+
+% Solve as a satisfaction problem
+solve satisfy;
+
+% Output the series and intervals
+output ["Series: ", show(s), "\nIntervals: ", show(d)];
+```

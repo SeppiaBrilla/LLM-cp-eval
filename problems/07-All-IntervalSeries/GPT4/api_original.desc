@@ -1,0 +1,49 @@
+Reasoning:
+
+1. Decision Variables:
+   - The series `s` is a permutation of Zn=0,1,...,n−1. This is the main decision variable.
+   - The interval vector `v` is a permutation of Zn∖{0}={1,2,...,n−1}. This is derived from `s`.
+
+2. Domains:
+   - The domain of `s` is the set of integers from 0 to n-1.
+   - The domain of `v` is the set of integers from 1 to n-1.
+
+3. Constraints:
+   - `s` is a permutation of Zn=0,1,...,n−1. This means that each integer from 0 to n-1 must appear exactly once in `s`.
+   - `v` is a permutation of Zn∖{0}={1,2,...,n−1}. This means that each integer from 1 to n-1 must appear exactly once in `v`.
+   - The elements of `v` are the absolute differences between consecutive elements of `s`. This can be encoded as a constraint.
+
+4. This is a satisfaction problem. There is no objective function to optimize.
+
+5. Potential Simplifications or Modeling Choices:
+   - The problem can be simplified by treating `s` and `v` as arrays of integers, and using the `alldifferent` global constraint to ensure that they are permutations of their respective sets.
+   - The constraint linking `s` and `v` can be encoded using a loop over the indices of the arrays.
+
+MiniZinc model:
+
+```minizinc
+% The size of the problem
+int: n = 12;
+
+% The series s
+array[1..n] of var 0..n-1: s;
+
+% The interval vector v
+array[1..n-1] of var 1..n-1: v;
+
+% s is a permutation of 0..n-1
+constraint alldifferent(s);
+
+% v is a permutation of 1..n-1
+constraint alldifferent(v);
+
+% The elements of v are the absolute differences between consecutive elements of s
+constraint forall(i in 1..n-1) (
+  v[i] = abs(s[i+1] - s[i])
+);
+
+% Find a solution
+solve satisfy;
+```
+
+This model will find a series `s` and an interval vector `v` that satisfy the given conditions. The `alldifferent` constraint ensures that `s` and `v` are permutations of their respective sets, and the loop over the indices of the arrays encodes the relationship between `s` and `v`. The `solve satisfy` statement tells MiniZinc to find a solution that satisfies all the constraints.

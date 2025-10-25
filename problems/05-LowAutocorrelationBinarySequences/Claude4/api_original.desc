@@ -1,0 +1,57 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need a binary sequence S of length n, where each element S[i] can take values +1 or -1.
+
+2. **Domains**: Each S[i] ∈ {-1, +1} for i = 0, 1, ..., n-1 (using 0-based indexing to match the mathematical definition).
+
+3. **Autocorrelation Definition**: For each k from 1 to n-1, we need to compute C_k = ∑_{i=0}^{n-k-1} S_i * S_{i+k}. This represents the correlation between the sequence and itself shifted by k positions.
+
+4. **Objective Function**: We want to minimize E = ∑_{k=1}^{n-1} C_k². This is a quadratic objective function that penalizes large autocorrelations.
+
+5. **Modeling Choices**: 
+   - We'll use auxiliary variables C[k] to represent each autocorrelation value
+   - We'll use auxiliary variables C_squared[k] to represent C_k² for clarity
+   - The sequence length n should be a parameter that can be easily modified
+   - We'll use 1-based indexing in MiniZinc for arrays (S[1..n]) but adjust the mathematical formulas accordingly
+
+6. **Constraints**: The main constraints are the definitions of the autocorrelations. Each C[k] must equal the sum ∑_{i=1}^{n-k} S[i] * S[i+k] (adjusting for 1-based indexing).
+
+**MiniZinc model:**
+
+```minizinc
+% Binary sequence autocorrelation minimization problem
+% Minimize the sum of squares of autocorrelations
+
+% Parameter: sequence length
+int: n;
+
+% Decision variables: binary sequence with values +1 or -1
+array[1..n] of var {-1, 1}: S;
+
+% Auxiliary variables: autocorrelations C_k for k = 1 to n-1
+array[1..n-1] of var int: C;
+
+% Auxiliary variables: squares of autocorrelations
+array[1..n-1] of var int: C_squared;
+
+% Constraints: define each autocorrelation C_k
+constraint forall(k in 1..n-1) (
+    C[k] = sum(i in 1..n-k) (S[i] * S[i+k])
+);
+
+% Constraints: define squares of autocorrelations
+constraint forall(k in 1..n-1) (
+    C_squared[k] = C[k] * C[k]
+);
+
+% Objective: minimize the sum of squares of autocorrelations
+var int: objective = sum(k in 1..n-1) (C_squared[k]);
+solve minimize objective;
+
+% Output
+output [
+    "Sequence: " ++ show(S) ++ "\n" ++
+    "Autocorrelations: " ++ show(C) ++ "\n" ++
+    "Sum of squares: " ++ show(objective) ++ "\n"
+];
+```

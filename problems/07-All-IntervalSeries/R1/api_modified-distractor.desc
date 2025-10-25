@@ -1,0 +1,49 @@
+**Reasoning:**
+
+1. **Problem Analysis:** The goal is to find a sequence of all n DNA samples (labeled 0 to n-1) such that the absolute differences in base-pair counts between consecutive samples are all distinct and cover the values from 1 to n-1. We assume the sample labels correspond to their base-pair counts for simplicity, as the problem uses labels in the difference calculations.
+
+2. **Decision Variables:** 
+   - Define `s` as an array of size n, where `s[i]` represents the sample at position i in the sequence. Each `s[i]` must be a distinct value from 0 to n-1 (a permutation).
+   - Define `d` as an array of size n-1, where `d[i]` is the absolute difference between `s[i]` and `s[i+1]` for each consecutive pair.
+
+3. **Domains:**
+   - `s[i]` ∈ {0, 1, ..., n-1} for i = 1..n.
+   - `d[i]` ∈ {1, 2, ..., n-1} for i = 1..n-1, as differences between distinct samples are at least 1 and at most n-1.
+
+4. **Constraints:**
+   - `all_different(s)`: Ensures each sample is processed exactly once.
+   - `d[i] = abs(s[i] - s[i+1])` for i = 1..n-1: Computes the absolute differences.
+   - `all_different(d)`: Ensures all differences are unique and cover 1 to n-1 (implied by the domain and distinctness).
+
+5. **Problem Type:** This is a constraint satisfaction problem (no optimization objective), so we use `solve satisfy`. The mention of avoiding large jumps is motivational but not enforced here.
+
+6. **Model Considerations:** The model is straightforward with the above variables and constraints. Output the sequence `s` for clarity.
+
+**MiniZinc Model:**
+
+```minizinc
+% Parameter: number of DNA samples
+int: n;
+
+% Decision variables: sequence of samples
+array[1..n] of var 0..n-1: s;
+
+% Derived variables: absolute differences between consecutive samples
+array[1..n-1] of var 1..n-1: d;
+
+% Constraints:
+constraint all_different(s);  % Each sample processed exactly once
+
+% Compute absolute differences
+constraint forall(i in 1..n-1) (
+    d[i] = abs(s[i] - s[i+1])
+);
+
+constraint all_different(d);  % Differences are unique and cover 1..n-1
+
+% Solve satisfy: find any valid sequence
+solve satisfy;
+
+% Output the sequence and differences
+output ["Sequence: ", show(s), "\nDifferences: ", show(d)];
+```

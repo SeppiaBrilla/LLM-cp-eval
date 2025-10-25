@@ -1,0 +1,46 @@
+Reasoning:
+
+1. The problem is about finding a delivery schedule for a fleet of drones. The schedule must satisfy certain conditions, which can be translated into constraints in a mathematical model.
+
+2. The decision variables are the time slots assigned to each drone for each delivery zone. These are integer variables, and their domain is from 1 to m, where m is the number of drones and delivery zones.
+
+3. The constraints are as follows:
+   - Each drone uses every time slot exactly once. This means that for each drone, the time slots assigned to it for all delivery zones must be different.
+   - Each delivery zone receives one delivery in every time slot. This means that for each delivery zone, the time slots assigned to all drones for it must be different.
+   - If a * b = c, a * b = c * d and a *321 b = c *321 d, then a = c and b = d. This is a complex constraint that needs to be encoded carefully. It can be interpreted as follows: if two drones have the same time slot for two delivery zones, and the derived coordination patterns also match, then the drones and the delivery zones must be the same.
+
+4. This is a satisfaction problem, as we are not trying to optimize any objective function. We are simply trying to find a schedule that satisfies all the constraints.
+
+5. There are no obvious simplifications or modeling choices to prefer. The problem is already quite complex and requires careful encoding of the constraints.
+
+MiniZinc model:
+
+```minizinc
+include "globals.mzn";
+
+% Number of drones and delivery zones
+int: m;
+
+% Time slots assigned to each drone for each delivery zone
+array[1..m, 1..m] of var 1..m: schedule;
+
+% Each drone uses every time slot exactly once
+constraint forall(i in 1..m) (
+  alldifferent([schedule[i, j] | j in 1..m])
+);
+
+% Each delivery zone receives one delivery in every time slot
+constraint forall(j in 1..m) (
+  alldifferent([schedule[i, j] | i in 1..m])
+);
+
+% If a * b = c, a * b = c * d and a *321 b = c *321 d, then a = c and b = d
+constraint forall(i, j, k, l in 1..m where i != k \/ j != l) (
+  (schedule[i, j] = schedule[k, l] /\ 
+  schedule[i, j] = schedule[schedule[i, j], l] /\ 
+  schedule[i, schedule[i, j]] = schedule[schedule[i, j], schedule[schedule[i, j], l]])
+  -> (i = k /\ j = l)
+);
+
+solve satisfy;
+```

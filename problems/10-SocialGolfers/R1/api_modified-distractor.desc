@@ -1,0 +1,69 @@
+### Reasoning
+
+1. **Problem Analysis**: The problem involves scheduling weekly sessions for 32 scientists divided into teams of 4, with 8 teams per week. Scientists are from 4 research areas (A, B, C, D), with 8 scientists per area. The goal is to maximize the number of weeks while ensuring:
+   - Each team is interdisciplinary (one scientist from each area).
+   - No two scientists work together more than once.
+
+2. **Key Constraints**:
+   - **Interdisciplinary Teams**: Each team must have exactly one scientist from each area.
+   - **No Repeated Pairs**: For any two scientists from different areas, they can be in the same team at most once across all weeks.
+
+3. **Maximum Weeks Calculation**:
+   - Total inter-area pairs: There are 4 areas, with 8 scientists each, so the number of pairs between any two areas is \(8 \times 8 = 64\). With 6 pairs of areas, total inter-area pairs = \(6 \times 64 = 384\).
+   - Pairs used per week: Each team has 4 scientists, so \( \binom{4}{2} = 6 \) pairs per team. With 8 teams per week, total pairs per week = \(8 \times 6 = 48\).
+   - Maximum weeks: Since each week uses 48 unique inter-area pairs, the maximum number of weeks is \( \floor{384 / 48} = 8 \). Thus, 8 weeks are achievable if all inter-area pairs are used exactly once.
+
+4. **Modeling Approach**:
+   - **Variables**: Define a 3D array `assignment[w, t, a]` representing the scientist index from area `a` in team `t` of week `w`.
+   - **Domains**: Scientist indices are from 1 to 8 for each area.
+   - **Constraints**:
+     - For each week and area, the scientist indices across teams must be all different (ensuring each scientist is used once per week).
+     - For each pair of distinct areas and each pair of indices, the pair appears exactly once across all weeks and teams (ensuring no repeated collaborations and covering all inter-area pairs).
+   - **Objective**: Since the maximum is 8 weeks, the model is a satisfaction problem with \(W = 8\).
+
+5. **Output**: The schedule is output for each week and team, showing the scientist from each area (e.g., "A1" for area A index 1).
+
+### MiniZinc Model
+
+```minizinc
+% Number of weeks, teams per week, areas, and scientists per area
+int: W = 8; % number of weeks
+int: T = 8; % teams per week
+set of int: WEEK = 1..W;
+set of int: TEAM = 1..T;
+set of int: AREA = 1..4; % 1=A, 2=B, 3=C, 4=D
+set of int: INDEX = 1..8; % scientist index within each area
+
+% Decision variable: assignment[w, t, a] = index of scientist from area a in team t of week w
+array[WEEK, TEAM, AREA] of var INDEX: assignment;
+
+% Constraint 1: For each week and each area, all scientist indices are distinct (each scientist used once per week per area)
+constraint forall(w in WEEK, a in AREA) (
+    all_different([assignment[w, t, a] | t in TEAM])
+);
+
+% Constraint 2: For each pair of distinct areas and each pair of indices, the pair appears exactly once across all weeks and teams
+constraint forall(a1 in AREA, a2 in AREA where a1 < a2) (
+    forall(i1 in INDEX, i2 in INDEX) (
+        1 == sum(w in WEEK, t in TEAM) (
+            assignment[w, t, a1] == i1 /\ assignment[w, t, a2] == i2
+        )
+    )
+);
+
+% Area names for output
+array[AREA] of string: area_name = ["A", "B", "C", "D"];
+
+% Output: Schedule for each week and team
+output [
+    "Week " ++ show(w) ++ ", Team " ++ show(t) ++ ": " ++
+    area_name[1] ++ show(assignment[w, t, 1]) ++ " " ++
+    area_name[2] ++ show(assignment[w, t, 2]) ++ " " ++
+    area_name[3] ++ show(assignment[w, t, 3]) ++ " " ++
+    area_name[4] ++ show(assignment[w, t, 4])
+    | w in WEEK, t in TEAM
+];
+
+% Solve: Satisfy the constraints
+solve satisfy;
+```

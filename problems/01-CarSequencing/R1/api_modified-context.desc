@@ -1,0 +1,56 @@
+**Reasoning:**
+
+1. **Problem Analysis:** The company produces a number of knapsacks, each of which can have various accessories attached. Each accessory has a dedicated sewing station with a capacity limit expressed as a maximum percentage of knapsacks that can have that accessory. Additionally, certain pairs of accessories are incompatible and cannot be placed on the same knapsack due to space constraints.
+
+2. **Key Entities:**
+   - **Knapsacks:** There are `N` knapsacks, each uniquely identified.
+   - **Accessories:** There are `M` accessories, each with a percentage capacity `P[a]` (0-100) indicating the maximum proportion of knapsacks that can have it.
+   - **Incompatible Pairs:** A list of pairs `(a,b)` where accessories `a` and `b` cannot be on the same knapsack.
+
+3. **Decision Variables:** 
+   - A binary matrix `x[i,j]` where `x[i,j] = 1` if knapsack `i` has accessory `j`, and `0` otherwise.
+
+4. **Constraints:**
+   - **Capacity Constraints:** For each accessory `j`, the total number of knapsacks with `j` must not exceed `floor(P[j] * N / 100)`. This is computed using integer division to handle discrete knapsacks.
+   - **Incompatibility Constraints:** For each incompatible pair `(a,b)` and each knapsack `i`, `x[i,a]` and `x[i,b]` cannot both be 1. This is enforced by `x[i,a] + x[i,b] <= 1`.
+
+5. **Problem Type:** This is a constraint satisfaction problem (no objective function), so we use `solve satisfy;` to find any feasible assignment.
+
+6. **Modeling Considerations:**
+   - The knapsack sizes are mentioned but do not affect the constraints, so they are ignored.
+   - Percentages are handled with integer arithmetic to avoid floating-point issues.
+   - Incompatible pairs are represented as a list of pairs for flexibility.
+
+**MiniZinc Model:**
+
+```minizinc
+% Parameters
+int: N;                           % Number of knapsacks
+int: M;                           % Number of accessories
+array[1..M] of int: P;            % Percentage capacity for each accessory (0-100)
+int: K;                           % Number of incompatible pairs
+array[1..K, 1..2] of int: incompatible; % List of incompatible accessory pairs
+
+% Decision variables: x[i,j] = 1 if knapsack i has accessory j
+array[1..N, 1..M] of var 0..1: x;
+
+% Constraints: Capacity for each accessory
+constraint forall(j in 1..M) (
+    sum(i in 1..N)(x[i,j]) <= (P[j] * N) div 100
+);
+
+% Constraints: Incompatible accessories cannot be on the same knapsack
+constraint forall(k in 1..K) (
+    forall(i in 1..N) (
+        x[i, incompatible[k,1]] + x[i, incompatible[k,2]] <= 1
+    )
+);
+
+% Solve for satisfaction
+solve satisfy;
+
+% Output the assignment matrix
+output [ if j == 1 then "\n" else "" endif ++ 
+         show(x[i,j]) ++ " " 
+         | i in 1..N, j in 1..M ];
+```

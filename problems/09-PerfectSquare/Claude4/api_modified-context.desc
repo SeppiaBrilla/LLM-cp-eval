@@ -1,0 +1,131 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need to determine:
+   - The side length of the square park (let's call it `park_size`)
+   - The number of zones to place in the park
+   - For each zone: its side length, and its position (x, y coordinates of bottom-left corner)
+
+2. **Domains**: 
+   - Park size: positive integer (we'll need to set a reasonable upper bound)
+   - Zone side lengths: positive integers, all different
+   - Zone positions: coordinates within the park boundaries
+
+3. **Key Constraints**:
+   - All zones must fit within the park boundaries
+   - No two zones can overlap
+   - All zones must have distinct sizes (side lengths)
+   - No group of zones can form a rectangular block (this is the most complex constraint)
+
+4. **Objective**: This appears to be a satisfaction problem rather than optimization - we want to find a valid arrangement. However, we might want to maximize the number of zones or minimize wasted space.
+
+5. **Modeling Choices**:
+   - We'll fix the number of zones as a parameter to make the problem more tractable
+   - The "no rectangular block" constraint means that for any rectangular region, it cannot be perfectly tiled by multiple zones
+   - We can model this by ensuring that no subset of zones forms a perfect rectangular tiling
+
+6. **Simplifications**:
+   - We'll start with a reasonable upper bound for park size
+   - We'll limit the number of zones to keep the problem manageable
+   - The rectangular block constraint can be enforced by checking that no two or more zones can be arranged to form a rectangle
+
+**MiniZinc Model:**
+
+```minizinc
+% City Park Zone Planning Problem
+% Design a square park divided into non-overlapping square zones of distinct sizes
+% with no rectangular block formations
+
+include "globals.mzn";
+
+% Parameters
+int: max_park_size = 20;  % Maximum park size to consider
+int: max_zones = 8;       % Maximum number of zones
+
+% Decision variables
+var 1..max_park_size: park_size;
+var 1..max_zones: num_zones;
+
+% Zone properties: size and position
+array[1..max_zones] of var 1..max_park_size: zone_size;
+array[1..max_zones] of var 0..max_park_size-1: zone_x;
+array[1..max_zones] of var 0..max_park_size-1: zone_y;
+
+% Auxiliary variables for active zones
+array[1..max_zones] of var bool: zone_active;
+
+% Constraints
+
+% Link zone activity with num_zones
+constraint sum(zone_active) = num_zones;
+
+% Active zones must have positive size, inactive zones have size 0
+constraint forall(i in 1..max_zones)(
+    zone_active[i] <-> zone_size[i] > 0
+);
+
+% All active zones must have distinct sizes
+constraint forall(i, j in 1..max_zones where i < j)(
+    zone_active[i] /\ zone_active[j] -> zone_size[i] != zone_size[j]
+);
+
+% Zones must fit within park boundaries
+constraint forall(i in 1..max_zones)(
+    zone_active[i] -> (zone_x[i] + zone_size[i] <= park_size /\ 
+                       zone_y[i] + zone_size[i] <= park_size)
+);
+
+% No overlapping zones
+constraint forall(i, j in 1..max_zones where i < j)(
+    zone_active[i] /\ zone_active[j] -> 
+    (zone_x[i] + zone_size[i] <= zone_x[j] \/
+     zone_x[j] + zone_size[j] <= zone_x[i] \/
+     zone_y[i] + zone_size[i] <= zone_y[j] \/
+     zone_y[j] + zone_size[j] <= zone_y[i])
+);
+
+% No rectangular block formation constraint
+% This ensures no two zones can be arranged to form a rectangle
+constraint forall(i, j in 1..max_zones where i < j)(
+    zone_active[i] /\ zone_active[j] ->
+    not (
+        % Horizontal alignment
+        (zone_y[i] = zone_y[j] /\ zone_size[i] = zone_size[j] /\
+         (zone_x[i] + zone_size[i] = zone_x[j] \/ zone_x[j] + zone_size[j] = zone_x[i])) \/
+        % Vertical alignment  
+        (zone_x[i] = zone_x[j] /\ zone_size[i] = zone_size[j] /\
+         (zone_y[i] + zone_size[i] = zone_y[j] \/ zone_y[j] + zone_size[j] = zone_y[i]))
+    )
+);
+
+% Extended rectangular block constraint for larger groups
+% Prevent 2x2 arrangements of zones that could form rectangles
+constraint forall(i, j, k, l in 1..max_zones where i < j /\ j < k /\ k < l)(
+    zone_active[i] /\ zone_active[j] /\ zone_active[k] /\ zone_active[l] ->
+    not (
+        % Check if four zones form a 2x2 block
+        zone_size[i] = zone_size[j] /\ zone_size[j] = zone_size[k] /\ zone_size[k] = zone_size[l] /\
+        exists(base_x, base_y in 0..max_park_size)(
+            {zone_x[i], zone_x[j], zone_x[k], zone_x[l]} = {base_x, base_x + zone_size[i]} /\
+            {zone_y[i], zone_y[j], zone_y[k], zone_y[l]} = {base_y, base_y + zone_size[i]}
+        )
+    )
+);
+
+% Objective: maximize number of zones while minimizing park size
+solve maximize (num_zones * 100 - park_size);
+
+% Output
+output [
+    "Park size: ", show(park_size), "\n",
+    "Number of zones: ", show(num_zones), "\n",
+    "Zone details:\n"
+] ++
+[
+    if zone_active[i] then
+        "Zone " ++ show(i) ++ ": size=" ++ show(zone_size[i]) ++ 
+        ", position=(" ++ show(zone_x[i]) ++ "," ++ show(zone_y[i]) ++ ")\n"
+    else ""
+    endif
+    | i in 1..max_zones
+];
+```

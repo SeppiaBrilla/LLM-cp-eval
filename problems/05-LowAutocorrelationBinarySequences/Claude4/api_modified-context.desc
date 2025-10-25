@@ -1,0 +1,63 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need to represent the rhythm sequence S, where each element S_i can be either +1 (beat) or -1 (rest). So we have n decision variables, one for each time step.
+
+2. **Variable Domains**: Each S_i ∈ {-1, +1}, representing rest and beat respectively.
+
+3. **Constraint Analysis**: 
+   - We need to compute the autocorrelation C_k for each lag k from 1 to n-1
+   - C_k = Σ(i=1 to n-k) S_i * S_{i+k}
+   - We need to compute E = Σ(k=1 to n-1) C_k²
+   - The objective is to minimize E
+
+4. **Modeling Choices**:
+   - We'll introduce auxiliary variables C[k] to represent each autocorrelation value
+   - We'll introduce auxiliary variables C_squared[k] to represent C_k²
+   - The objective function will be the sum of all C_squared[k] values
+   - Since we're dealing with products and squares, we need to be careful about the constraints
+
+5. **Implementation Details**:
+   - For each lag k, we need to sum the products S[i] * S[i+k] over valid indices
+   - We need to square each C[k] to get C_squared[k]
+   - The final objective is the sum of all squared autocorrelations
+
+**MiniZinc model:**
+
+```minizinc
+% Rhythm pattern optimization to minimize autocorrelation
+% Parameters
+int: n; % number of beats in the rhythm
+
+% Decision variables: rhythm sequence (+1 for beat, -1 for rest)
+array[1..n] of var -1..1: S;
+
+% Auxiliary variables for autocorrelations at each lag
+array[1..n-1] of var int: C;
+
+% Auxiliary variables for squared autocorrelations
+array[1..n-1] of var int: C_squared;
+
+% Constraints to ensure S[i] is either +1 or -1 (no 0 values)
+constraint forall(i in 1..n) (S[i] = -1 \/ S[i] = 1);
+
+% Compute autocorrelation C[k] for each lag k
+constraint forall(k in 1..n-1) (
+    C[k] = sum(i in 1..n-k) (S[i] * S[i+k])
+);
+
+% Compute squared autocorrelations
+constraint forall(k in 1..n-1) (
+    C_squared[k] = C[k] * C[k]
+);
+
+% Objective: minimize total squared autocorrelation
+var int: E = sum(k in 1..n-1) (C_squared[k]);
+solve minimize E;
+
+% Output the rhythm pattern and objective value
+output [
+    "Rhythm pattern: " ++ show(S) ++ "\n" ++
+    "Autocorrelations: " ++ show(C) ++ "\n" ++
+    "Objective value E: " ++ show(E) ++ "\n"
+];
+```

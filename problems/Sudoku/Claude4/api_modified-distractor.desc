@@ -1,0 +1,87 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need to represent what queen (if any) is placed at each cell of the 9×9 board. Since queens have different garments and we want to maximize the number of different garments, we need variables that can represent different garment types or no queen at all.
+
+2. **Domains**: Each cell can either be empty or contain a queen with a specific garment. Let's say we have garment types 1, 2, 3, ... up to some maximum number of garments, and 0 represents an empty cell.
+
+3. **Constraints**: 
+   - Pre-filled positions must be respected
+   - No two queens with the same garment can attack each other within the same attacking clique (row, column, or 3×3 block)
+   - Queens with different garments can coexist in the same attacking clique without conflict
+
+4. **Objective Function**: Maximize the number of different garment types present on the board.
+
+5. **Modeling Choices**:
+   - Use a 2D array `board[1..9, 1..9]` where 0 = empty, and positive integers represent different garments
+   - For blocks, we need a function to determine which 3×3 block a cell belongs to
+   - The constraint "no attack within same garment and same clique" can be modeled as: for each garment type, no two cells in the same row/column/block can both have that garment
+   - To maximize garment diversity, we can use a boolean array to track which garments are used and maximize the sum
+
+6. **Block Mapping**: Each cell (i,j) belongs to block `((i-1) div 3) * 3 + ((j-1) div 3) + 1`, giving us blocks numbered 1-9.
+
+**MiniZinc model:**
+
+```minizinc
+% Chess-inspired game with garmented queens
+% Maximize garment diversity while avoiding attacks within same garment cliques
+
+% Board size
+int: n = 9;
+
+% Maximum number of different garments we might use
+int: max_garments = 9;
+
+% Decision variables: board[i,j] = 0 (empty) or garment_type (1..max_garments)
+array[1..n, 1..n] of var 0..max_garments: board;
+
+% Track which garments are actually used
+array[1..max_garments] of var bool: garment_used;
+
+% Pre-filled positions (example - modify as needed)
+% constraint board[4,7] = 1; % blue queen at position (3,6) in 0-indexed = (4,7) in 1-indexed
+
+% Link garment usage with board state
+constraint forall(g in 1..max_garments)(
+    garment_used[g] <-> exists(i,j in 1..n)(board[i,j] = g)
+);
+
+% Function to determine which 3x3 block a cell belongs to (1-9)
+function int: get_block(int: i, int: j) = 
+    ((i-1) div 3) * 3 + ((j-1) div 3) + 1;
+
+% No attacks within same garment - Row constraint
+constraint forall(g in 1..max_garments, i in 1..n)(
+    sum(j in 1..n)(board[i,j] = g) <= 1
+);
+
+% No attacks within same garment - Column constraint  
+constraint forall(g in 1..max_garments, j in 1..n)(
+    sum(i in 1..n)(board[i,j] = g) <= 1
+);
+
+% No attacks within same garment - Block constraint
+constraint forall(g in 1..max_garments, b in 1..9)(
+    sum(i,j in 1..n where get_block(i,j) = b)(board[i,j] = g) <= 1
+);
+
+% Objective: maximize number of different garments used
+var int: num_garments_used = sum(g in 1..max_garments)(garment_used[g]);
+solve maximize num_garments_used;
+
+% Output
+output [
+    "Board configuration:\n"
+] ++
+[
+    if j = 1 then "Row " ++ show(i) ++ ": " else "" endif ++
+    if board[i,j] = 0 then "." else show(board[i,j]) endif ++
+    if j = n then "\n" else " " endif
+    | i,j in 1..n
+] ++
+[
+    "\nNumber of different garments used: " ++ show(num_garments_used) ++ "\n"
+] ++
+[
+    "Garments used: " ++ show([g | g in 1..max_garments where garment_used[g]]) ++ "\n"
+];
+```

@@ -1,0 +1,58 @@
+**Reasoning:**
+
+1. **Decision Variables**: We need to determine the order in which to process the DNA samples. This means we need a sequence of n positions, where each position contains one of the sample labels (0 to n-1).
+
+2. **Variable Domains**: 
+   - Let `s[i]` represent the sample processed at position i (for i = 1 to n)
+   - Each `s[i]` has domain {0, 1, ..., n-1}
+   - We also need variables for the absolute differences between consecutive samples
+   - Let `diff[i]` represent |s[i+1] - s[i]| for i = 1 to n-1
+   - Each `diff[i]` has domain {1, 2, ..., n-1}
+
+3. **Constraints**:
+   - **Unique Processing**: The sequence s must be a permutation of {0, 1, ..., n-1}, meaning each sample appears exactly once
+   - **Unique Differences**: The differences between consecutive samples must form a permutation of {1, 2, ..., n-1}, meaning each difference value from 1 to n-1 appears exactly once
+   - **Difference Calculation**: We need to properly calculate the absolute differences: diff[i] = |s[i+1] - s[i]|
+
+4. **Problem Type**: This is a constraint satisfaction problem (CSP) - we're looking for any valid sequence that satisfies all constraints, not optimizing any particular objective.
+
+5. **Modeling Considerations**: 
+   - We can use MiniZinc's `alldifferent` constraint to ensure both the sample sequence and difference sequence are permutations
+   - For absolute value calculation, we can use MiniZinc's `abs` function
+   - The problem is essentially finding a Hamiltonian path in a complete graph where edge weights correspond to the required differences
+
+**MiniZinc model:**
+
+```minizinc
+% DNA Sample Processing Order Problem
+% Find a permutation of samples such that consecutive differences are also a permutation
+
+% Number of DNA samples
+int: n;
+
+% Decision variables: sequence of samples to process
+array[1..n] of var 0..n-1: s;
+
+% Auxiliary variables: absolute differences between consecutive samples  
+array[1..n-1] of var 1..n-1: diff;
+
+% Constraint 1: Each sample must be processed exactly once (permutation)
+constraint alldifferent(s);
+
+% Constraint 2: Calculate absolute differences between consecutive samples
+constraint forall(i in 1..n-1) (
+    diff[i] = abs(s[i+1] - s[i])
+);
+
+% Constraint 3: All differences must be unique and cover {1, 2, ..., n-1}
+constraint alldifferent(diff);
+
+% Solve the constraint satisfaction problem
+solve satisfy;
+
+% Output the solution
+output [
+    "Sample processing order: " ++ show(s) ++ "\n" ++
+    "Consecutive differences: " ++ show(diff) ++ "\n"
+];
+```

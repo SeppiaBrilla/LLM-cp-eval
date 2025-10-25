@@ -3,8 +3,13 @@
         "runs": true,
         "globals": true,
         "correctProblem": true
+    },    
+    "modified-context": {
+        "runs": true,
+        "globals": true,
+        "correctProblem": true
     },
-    "modified": {
+    "modified-distractor": {
         "runs": false,
         "globals": true,
         "correctProblem": false

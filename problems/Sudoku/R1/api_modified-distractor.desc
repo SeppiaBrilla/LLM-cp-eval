@@ -1,0 +1,99 @@
+**Reasoning:**
+
+1. **Problem Understanding:**  
+   - We have a 9x9 chessboard (n=9) where we need to place exactly 9 queens, each with a garment type.  
+   - Queens can only attack other queens with the same garment if they are in the same row, same column, or same 3x3 block.  
+   - The goal is to maximize the number of distinct garment types used among the 9 queens, while ensuring that no two queens with the same garment attack each other.  
+   - Some cells are pre-filled with specific garments (e.g., cell (3,6) has a blue_queen).
+
+2. **Key Elements:**  
+   - **Board Representation:** Use a 2D array `board` of size 9x9, where each cell can hold a garment type (1-9) or 0 if no queen is present.  
+   - **Queens Count:** Exactly 9 cells must have a queen (i.e., `board[i,j] != 0`).  
+   - **Attack Constraints:** For each garment type `g`, no two queens with `g` can share the same row, column, or 3x3 block.  
+   - **Blocks Definition:** The board is divided into 9 blocks of size 3x3. The block index for a cell (i,j) is computed as `3 * (i div 3) + (j div 3)`.  
+   - **Pre-filled Spots:** Fixed assignments must be respected (e.g., `board[3,6] = 1` if blue_queen is garment type 1).  
+   - **Objective:** Maximize the number of distinct garment types used, which is the count of `g` in 1..9 for which at least one queen has garment `g`.
+
+3. **Modeling Choices:**  
+   - Use 0-based indexing for rows and columns (0..8) to match the block descriptions.  
+   - Garment types are represented as integers 1..9, with 0 indicating no queen.  
+   - For each garment `g`, enforce:  
+     - At most one queen per row.  
+     - At most one queen per column.  
+     - At most one queen per block.  
+   - Define a boolean array `used` to track which garment types are used, and maximize the sum of `used[g]`.  
+   - Handle pre-filled spots as constraints that fix `board[i,j]` to specific values.
+
+4. **Constraints Breakdown:**  
+   - **Exactly 9 Queens:** The sum of non-zero `board[i,j]` equals 9.  
+   - **Row Constraints:** For each garment `g` and row `i`, the number of cells in row `i` with `board[i,j] = g` is at most 1.  
+   - **Column Constraints:** For each garment `g` and column `j`, the number of cells in column `j` with `board[i,j] = g` is at most 1.  
+   - **Block Constraints:** For each garment `g` and block `b`, the number of cells in block `b` with `board[i,j] = g` is at most 1.  
+   - **Fixed Assignments:** Pre-filled cells are set to their specified garment types.
+
+5. **Objective Function:**  
+   - Maximize the number of distinct garment types used, i.e., the sum of `used[g]` for `g` in 1..9, where `used[g]` is true if at least one queen has garment `g`.
+
+**MiniZinc Model:**
+```minizinc
+% MiniZinc model for placing queens with garments on a 9x9 board
+% Goal: Maximize distinct garments while avoiding attacks between same-garment queens
+
+% Sets for rows, columns, garments, and blocks
+set of int: ROWS = 0..8;
+set of int: COLS = 0..8;
+set of int: GARMENTS = 1..9;
+set of int: BLOCKS = 0..8;
+
+% Decision variable: board[i,j] = garment type (1-9) if queen present, else 0
+array[ROWS, COLS] of var 0..9: board;
+
+% Boolean array to track which garment types are used
+array[GARMENTS] of var bool: used;
+
+% Constraint: Exactly 9 queens on the board
+constraint sum(i in ROWS, j in COLS)(board[i,j] != 0) = 9;
+
+% Constraints for no attacks between same-garment queens:
+% For each garment g, at most one queen per row, per column, and per block
+constraint forall(g in GARMENTS) (
+    forall(i in ROWS) ( sum(j in COLS)(board[i,j] == g) <= 1 ) /\
+    forall(j in COLS) ( sum(i in ROWS)(board[i,j] == g) <= 1 )
+);
+
+% Block constraints: for each garment g and each block b, at most one queen
+constraint forall(b in BLOCKS) (
+    let {
+        int: start_r = 3 * (b div 3),  % starting row of block b
+        int: start_c = 3 * (b mod 3)    % starting column of block b
+    } in
+    forall(g in GARMENTS) (
+        sum(i in start_r..start_r+2, j in start_c..start_c+2)(board[i,j] == g) <= 1
+    )
+);
+
+% Pre-filled spots: example: cell (3,6) has blue_queen (garment type 1)
+constraint board[3,6] = 1;  % Adjust garment type as needed for other fixed cells
+
+% Define used[g] for each garment g: true if at least one queen has garment g
+constraint forall(g in GARMENTS) (
+    used[g] <-> (sum(i in ROWS, j in COLS)(board[i,j] == g) >= 1)
+);
+
+% Objective: Maximize the number of distinct garment types used
+solve maximize sum(used);
+
+% Output: Show the board and the distinct garments used
+output [
+    "Board:\n" ++ 
+    show2d(board) ++ 
+    "\nDistinct garments used: " ++ show(sum(used)) ++ 
+    "\nUsed garments: " ++ show(used)
+];
+```
+
+**Notes:**
+- This model uses 0-based indexing for rows and columns (0..8).
+- The pre-filled spot `board[3,6] = 1` is hardcoded; for additional fixed cells, add similar constraints.
+- The block computation uses integer division and modulo to determine the 3x3 blocks.
+- The objective is to maximize the count of distinct garments, and the output displays the board and usage information.

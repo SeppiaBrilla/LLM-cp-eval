@@ -1,0 +1,43 @@
+**Reasoning:**
+
+1. The problem involves finding a sequence of all n DNA samples (labeled 0 to n-1) that is a permutation of the integers from 0 to n-1. This corresponds to each sample being processed exactly once.
+
+2. The key constraint is that the absolute differences in base-pair counts between consecutive samples must all be distinct and must cover exactly the integers from 1 to n-1. Since the samples have unique base-pair counts and are labeled from 0 to n-1, the labels can be directly used as the base-pair counts for calculating differences.
+
+3. To model this, we define a decision variable array `s` of size n, where each `s[i]` represents the sample at position i in the sequence, with domain 0..n-1. The `all_different` constraint on `s` ensures it is a permutation.
+
+4. We define another array `diff` of size n-1 to store the absolute differences between consecutive samples: `diff[i] = |s[i+1] - s[i]|` for i from 1 to n-1. The domain of `diff` is set to 1..n-1 because the differences between distinct integers in 0..n-1 must be at least 1 and at most n-1.
+
+5. The `all_different` constraint on `diff` ensures that all differences are unique and, since there are exactly n-1 differences in 1..n-1, they must form a permutation of 1..n-1.
+
+6. This is a satisfaction problem with no objective function, so we use `solve satisfy` to find any valid sequence.
+
+**MiniZinc model:**
+
+```minizinc
+% Parameter: number of DNA samples
+int: n;
+
+% Decision variable: sequence of samples, s[i] is the sample at position i
+array[1..n] of var 0..n-1: s;
+
+% Constraint: s must be a permutation of 0..n-1
+constraint all_different(s);
+
+% Decision variable for consecutive absolute differences
+array[1..n-1] of var 1..n-1: diff;
+
+% Constraint: compute absolute differences between consecutive samples
+constraint forall(i in 1..n-1) (
+    diff[i] = abs(s[i+1] - s[i])
+);
+
+% Constraint: differences must be all distinct and cover 1..n-1
+constraint all_different(diff);
+
+% Solve satisfy: find any valid sequence
+solve satisfy;
+
+% Output the sequence of samples
+output ["Sequence: "] ++ [show(s[i]) | i in 1..n];
+```

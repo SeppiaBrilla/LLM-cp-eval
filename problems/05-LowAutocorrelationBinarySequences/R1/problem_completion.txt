@@ -1,0 +1,1 @@
+These problems have many practical applications in communications and electrical engineering. The objective is to construct a binary sequence Si of length n that minimizes the autocorrelations between bits. Each bit in the sequence takes the value +1 or -1.

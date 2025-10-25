@@ -1,0 +1,67 @@
+**Reasoning:**
+
+1. **Problem Understanding:** The goal is to model a QG1.m quasigroup, which is an order m quasigroup (Latin square) with an additional property: for all a, b, c, d in the set {1,...,m}, if a*b = c*d and a*321 b = c*321 d, then a = c and b = d.
+
+2. **Quasigroup Representation:** A quasigroup is represented by an m x m Latin square, meaning a matrix `q` where `q[i,j]` is the product of i and j, and each row and each column must contain all elements from 1 to m exactly once.
+
+3. **Definition of *321 Operation:** The operation a*321 b is defined as the element c such that c*b = a. This is equivalent to the left division operation. We introduce a matrix `q321` where `q321[a,b]` is the unique element satisfying `q[ q321[a,b], b ] = a`.
+
+4. **QG1 Property Reformulation:** The condition "if a*b = c*d and a*321 b = c*321 d then a=c and b=d" can be rephrased as: the map (a,b) -> (q[a,b], q321[a,b]) must be injective. This means all pairs (q[a,b], q321[a,b]) for a,b in 1..m must be distinct.
+
+5. **Encoding Pairs for Distinctness:** Since MiniZinc does not directly support tuples in constraints, we encode each pair (x,y) as a single number: (x-1)*m + y. This encoding maps each pair to a unique value between 1 and m². We then require that all these encoded values are distinct.
+
+6. **Model Components:**
+   - Parameter `m` for the order.
+   - Variable matrix `q` for the quasigroup operation.
+   - Variable matrix `q321` for the *321 operation.
+   - Constraints:
+     - Latin square constraints: all rows and columns of `q` must be all-different.
+     - Relationship between `q` and `q321`: for all a,b, `q[ q321[a,b], b ] = a`.
+     - Distinctness of encoded pairs.
+
+7. **Solution Approach:** The model is a satisfaction problem; we seek any valid assignment to `q` and `q321` that satisfies all constraints.
+
+**MiniZinc Model:**
+```minizinc
+% Model for QG1.m quasigroup existence
+% Order m quasigroup with additional property: 
+% if a*b = c*d and a*321 b = c*321 d then a=c and b=d.
+
+int: m; % Order of the quasigroup
+
+% Quasigroup operation: q[i,j] = i * j
+array[1..m, 1..m] of var 1..m: q;
+
+% *321 operation: q321[a,b] = c such that c * b = a
+array[1..m, 1..m] of var 1..m: q321;
+
+% Latin square constraints: each row and column of q must be all-different
+constraint forall(i in 1..m) (
+    all_different([q[i,j] | j in 1..m])
+);
+constraint forall(j in 1..m) (
+    all_different([q[i,j] | i in 1..m])
+);
+
+% Define q321 based on q: for each a,b, q[ q321[a,b], b ] = a
+constraint forall(a in 1..m, b in 1..m) (
+    q[ q321[a,b], b ] = a
+);
+
+% Encode pairs (q[a,b], q321[a,b]) as single numbers for distinctness
+array[1..m*m] of var 1..m*m: encoded_pairs;
+constraint forall(i in 1..m, j in 1..m) (
+    encoded_pairs[(i-1)*m + j] = (q[i,j] - 1) * m + q321[i,j]
+);
+
+% All encoded pairs must be distinct
+constraint all_different(encoded_pairs);
+
+% Solve satisfy: find any valid assignment
+solve satisfy;
+
+% Output the quasigroup matrix q
+output ["q = \n"] ++ 
+       [ show_int(4, q[i,j]) ++ if j == m then "\n" else " " endif |
+         i in 1..m, j in 1..m ];
+```

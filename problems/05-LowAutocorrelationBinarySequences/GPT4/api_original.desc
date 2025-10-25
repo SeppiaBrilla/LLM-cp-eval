@@ -1,0 +1,47 @@
+Reasoning:
+
+1. Decision Variables:
+   - The decision variables are the bits in the sequence, denoted as `S[i]` for `i` in `1..n`. Each `S[i]` can take a value of +1 or -1.
+
+2. Domains:
+   - The domain of each `S[i]` is {-1, 1}.
+
+3. Constraints:
+   - There are no explicit constraints in this problem. However, the autocorrelation `C[k]` for each `k` in `1..n-1` is defined as the sum of the product of `S[i]` and `S[i+k]` for `i` in `1..n-k`. This is not a constraint but a calculation that needs to be performed for each `k`.
+
+4. Objective Function:
+   - The objective function is to minimize the sum of the squares of the autocorrelations, denoted as `E`. `E` is defined as the sum of `C[k]^2` for each `k` in `1..n-1`.
+
+5. Simplifications or Modeling Choices:
+   - Since the autocorrelation `C[k]` is defined as a sum, it can be calculated using a `sum` expression in MiniZinc.
+   - The objective function `E` is also a sum of squares, which can be calculated using a `sum` expression in MiniZinc.
+   - The decision variables `S[i]` can be defined as an array of integers with a domain of {-1, 1}.
+
+MiniZinc model:
+
+```minizinc
+% Define the length of the sequence
+int: n;
+
+% Define the sequence of bits
+array[1..n] of var -1..1: S;
+
+% Define the autocorrelations
+array[1..n-1] of var int: C;
+
+% Calculate the autocorrelations
+constraint forall(k in 1..n-1) (
+  C[k] = sum(i in 1..n-k) (S[i] * S[i+k])
+);
+
+% Define the objective function
+var int: E = sum(k in 1..n-1) (C[k]^2);
+
+% Minimize the objective function
+solve minimize E;
+
+% Output the sequence and the objective function value
+output ["Sequence: " ++ show(S) ++ "\nObjective function value: " ++ show(E)];
+```
+
+This model will find a sequence of bits that minimizes the sum of the squares of the autocorrelations. The sequence and the objective function value are outputted at the end.

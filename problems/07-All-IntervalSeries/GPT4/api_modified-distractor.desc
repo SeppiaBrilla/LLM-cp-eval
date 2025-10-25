@@ -1,0 +1,43 @@
+Reasoning:
+1. Decision Variables:
+   - The decision variable is the sequence of DNA samples to be processed. This can be represented as an array `s` of size `n`, where `s[i]` represents the `i-th` sample to be processed.
+
+2. Domains:
+   - The domain of each element in the sequence `s` is from `0` to `n-1`, as each sample is labeled from `0` to `n-1`.
+
+3. Constraints:
+   - Unique Processing: Each DNA sample must be processed exactly once. This can be ensured by making sure that all elements in the sequence `s` are different.
+   - Unique Differences: The difference in base-pair counts between consecutive samples must be unique, covering all possible differences from `1` to `n-1`. This can be ensured by creating an array `diff` of size `n-1`, where `diff[i]` is the absolute difference between `s[i+1]` and `s[i]`. All elements in `diff` must be different and within the range `1` to `n-1`.
+
+4. This is a satisfaction problem as we are looking for a sequence that satisfies the given constraints.
+
+5. Potential Simplifications or Modeling Choices:
+   - The problem can be simplified by using the `all_different` constraint in MiniZinc, which ensures that all elements in a given array are different.
+
+MiniZinc model:
+```minizinc
+include "globals.mzn";
+
+% number of DNA samples
+int: n;
+
+% sequence of DNA samples to be processed
+array[1..n] of var 0..n-1: s;
+
+% absolute differences between consecutive samples
+array[1..n-1] of var 1..n-1: diff;
+
+% each DNA sample must be processed exactly once
+constraint alldifferent(s);
+
+% the difference in base-pair counts between consecutive samples must be unique
+constraint forall(i in 1..n-1) (
+  diff[i] = abs(s[i+1] - s[i])
+);
+
+% all differences must be unique
+constraint alldifferent(diff);
+
+solve satisfy;
+```
+This model ensures that each DNA sample is processed exactly once and the difference in base-pair counts between consecutive samples is unique. The `solve satisfy` statement is used to find a sequence that satisfies these constraints.
