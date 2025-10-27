@@ -4,7 +4,7 @@
         "globals": false,
         "correctProblem": true
     },
-    "modified": {
+    "modified-context": {
         "runs": true,
         "globals": false,
         "correctProblem": false
