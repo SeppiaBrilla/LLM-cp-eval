@@ -77,31 +77,50 @@ def generate(system_prompt:str, model_type:str):
     else:
         raise ValueError(f"unknown llm {model_type}")
     for element in tqdm(os.listdir("./problems")):
+        if element.startswith("__"):
+            continue
         if not os.path.isdir(f'./problems/{element}'):
             continue
         with open(f'./problems/{element}/specification.txt') as f:
             content = f.read()
         lines = content.splitlines()
         assert lines[0] == "original:"
-        original, modified = "", ""
-        is_original = True
+        original, context_only, distractor = "", "", ""
+        combinatorial_model_type = 'original'
         for line in lines[1:]:
-            if line == "modified:":
-                is_original = False
-            elif is_original:
+            if line == "modified-context-only:":
+                combinatorial_model_type = 'context'
+            elif line == 'modified-distractor:':
+                combinatorial_model_type = 'distractor'
+            elif combinatorial_model_type == 'original':
                 original += "\n" + line
+            elif combinatorial_model_type == 'context':
+                context_only += "\n" + line
             else:
-                modified += "\n" + line
+                assert combinatorial_model_type == "distractor"
+                distractor += "\n" + line
+
+        # print(lines)
+        assert original != ''
+        assert context_only != ''
+        assert distractor != '', element
         if not os.path.exists(f'./problems/{element}/{model_dir}'):
             os.mkdir(f'./problems/{element}/{model_dir}')
-        original_model = model_func(original, system_prompt)
-        assert original_model is not None
-        with open(f'./problems/{element}/{model_dir}/api_original.desc', 'w') as f:
-            f.write(original_model)
-        modified_model = model_func(modified, system_prompt)
-        assert modified_model is not None
-        with open(f'./problems/{element}/{model_dir}/api_modified.desc', 'w') as f:
-            f.write(modified_model)
+        if not os.path.exists(f'./problems/{element}/{model_dir}/api_original.desc'):
+            original_model = model_func(original, system_prompt)
+            assert original_model is not None
+            with open(f'./problems/{element}/{model_dir}/api_original.desc', 'w') as f:
+                f.write(original_model)
+        if not os.path.exists(f'./problems/{element}/{model_dir}/api_modified-distractor.desc'):
+            modified_model = model_func(distractor, system_prompt)
+            assert modified_model is not None
+            with open(f'./problems/{element}/{model_dir}/api_modified-distractor.desc', 'w') as f:
+                f.write(modified_model)
+        if not os.path.exists(f'./problems/{element}/{model_dir}/api_modified-context.desc'):
+            modified_model = model_func(context_only, system_prompt)
+            assert modified_model is not None
+            with open(f'./problems/{element}/{model_dir}/api_modified-context.desc', 'w') as f:
+                f.write(modified_model)
 
 def main():
     if len(sys.argv) < 2:
