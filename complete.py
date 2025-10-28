@@ -87,16 +87,19 @@ def generate(model_type:str):
         assert lines[0] == "original:"
         original = ""
         for line in lines[1:]:
-            if line == "modified:":
+            if line == "modified-context-only:":
                 break
             original += "\n" + line
         original = original[:len(original)//2]
         if not os.path.exists(f'./problems/{element}/{model_dir}'):
             os.mkdir(f'./problems/{element}/{model_dir}')
-        problem_description = model_func(original)
-        assert problem_description is not None
-        with open(f'./problems/{element}/{model_dir}/problem_completion.txt', 'w') as f:
-            f.write(problem_description)
+        if not os.path.exists(f'./problems/{element}/{model_dir}/problem_completion.txt'):
+            print(original)
+            # raise Exception()
+            problem_description = model_func(original)
+            assert problem_description is not None
+            with open(f'./problems/{element}/{model_dir}/problem_completion.txt', 'w') as f:
+                f.write(problem_description)
 
 def main():
     if len(sys.argv) < 2:
