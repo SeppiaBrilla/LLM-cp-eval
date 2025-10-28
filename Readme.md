@@ -32,7 +32,9 @@ Each problem in the `problems/` directory has its own subdirectory, structured a
   ```
   original:
   [... original description from [csplib](https://www.csplib.org/) ...]
-  modified:
+  modified-context-only:
+  [... rephrased version with altered context ...]
+  modified-distractor:
   [... rephrased version with altered context and added noise ...]
   ```
 
@@ -41,9 +43,10 @@ Each problem in the `problems/` directory has its own subdirectory, structured a
 * **Subdirectories for each LLM** (e.g., `GPT4/`, `Claude4/`, `R1/`), each containing:
 
   * **`api_original.desc`** – LLM’s response to the original problem description (including model and reasoning steps).
-  * **`api_modified.desc`** – LLM’s response to the rephrased problem description (including model and reasoning steps).
+  * **`api_modified-context.desc`** – LLM’s response to the rephrased problem description (including model and reasoning steps).
+  * **`api_modified-distracto.desc`** – LLM’s response to the rephrased and with added noise problem description (including model and reasoning steps).
   * **`problem_completion.txt`** – Original problem description completed by the LLM.
-  * **`summary.json`** – Summary of results of the two models. It contains a **`similar`** key that it is true if the generated problem completion is similar to the original from CSPlib, false otherwise. Then, under the **`original`** and **`modified`** keys, there are 3 boolean sub-keys: 
+  * **`summary.json`** – Summary of results of the two models. It contains a **`similar`** key that it is true if the generated problem completion is similar to the original from CSPlib, false otherwise. Then, under the **`original`**, **`modified-context`** and **`modified-distractor`** keys, there are 3 boolean sub-keys: 
     * **`runs`**: if the models runs and it solves the problem correctly, e.g. the constraints actually do what they are supposed to do.
     * **`globals`**: if the model contains global constraints.
     * **`correctProblem`**: if the proposed model solves the correct problem.
