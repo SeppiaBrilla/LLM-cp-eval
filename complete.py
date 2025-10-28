@@ -94,8 +94,6 @@ def generate(model_type:str):
         if not os.path.exists(f'./problems/{element}/{model_dir}'):
             os.mkdir(f'./problems/{element}/{model_dir}')
         if not os.path.exists(f'./problems/{element}/{model_dir}/problem_completion.txt'):
-            print(original)
-            # raise Exception()
             problem_description = model_func(original)
             assert problem_description is not None
             with open(f'./problems/{element}/{model_dir}/problem_completion.txt', 'w') as f:
