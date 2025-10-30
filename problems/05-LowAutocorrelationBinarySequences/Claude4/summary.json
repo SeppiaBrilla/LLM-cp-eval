@@ -14,5 +14,5 @@
         "globals": false,
         "correctProblem": false
     },
-    "similar": false
+    "similar": true
 }

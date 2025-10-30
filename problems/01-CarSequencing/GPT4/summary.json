@@ -10,7 +10,7 @@
         "correctProblem":false
     },
     "modified-distractor":{
-        "runs":true,
+        "runs":false,
         "globals":false,
         "correctProblem":false
     },

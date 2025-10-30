@@ -5,12 +5,12 @@
         "correctProblem":true
     },
     "modified-context":{
-        "runs":true,
+        "runs":false,
         "globals":false,
         "correctProblem":false
     },
     "modified-distractor":{
-        "runs":true,
+        "runs":false,
         "globals":false,
         "correctProblem":false
     },
